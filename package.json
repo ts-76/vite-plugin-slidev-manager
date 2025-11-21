@@ -1,0 +1,56 @@
+{
+    "name": "vite-plugin-slidev-manager",
+    "version": "0.0.1",
+    "type": "module",
+    "description": "A Vite plugin for managing multiple Slidev presentations in a monorepo structure.",
+    "author": "ts-76",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/ts-76/vite-plugin-slidev-manager.git"
+    },
+    "keywords": [
+        "vite",
+        "plugin",
+        "slidev",
+        "manager",
+        "monorepo"
+    ],
+    "files": [
+        "dist"
+    ],
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": "./dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "test": "vitest run",
+        "lint": "biome check src",
+        "format": "biome check --write src"
+    },
+    "dependencies": {
+        "ink": "^5.2.1",
+        "ink-select-input": "^6.2.0",
+        "react": "^18.3.1"
+    },
+    "peerDependencies": {
+        "vite": "^5.0.0 || ^6.0.0 || ^7.0.0",
+        "@slidev/cli": ">=52.9.1"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.3.6",
+        "@slidev/cli": "^52.9.1",
+        "@types/ink": "^0.5.2",
+        "@types/node": "^24.10.1",
+        "@types/react": "^18.3.3",
+        "playwright-chromium": "^1.56.1",
+        "typescript": "^5.9.3",
+        "vite": "^7.2.4",
+        "vitest": "^4.0.12"
+    },
+    "overrides": {
+        "monaco-editor": "^0.55.0"
+    }
+}
