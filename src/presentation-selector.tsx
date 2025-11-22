@@ -188,15 +188,13 @@ function formatLabel(option: PresentationOption): string {
         option.run.type === 'workspace'
             ? workspaceName
             : (option.run.relativeSlidesPath ?? '');
-    const prefix = option.run.type === 'workspace' ? '[workspace]' : '[slides]';
-
     if (
         option.run.type === 'workspace' &&
         option.title &&
         slugFromWorkspace &&
         option.title !== slugFromWorkspace
     ) {
-        return `${prefix} ${baseTitle} (${slugFromWorkspace})`;
+        return `${baseTitle} (${slugFromWorkspace})`;
     }
 
     if (
@@ -204,10 +202,10 @@ function formatLabel(option: PresentationOption): string {
         slugFromWorkspace &&
         slugFromWorkspace !== option.folder
     ) {
-        return `${prefix} ${option.folder} (${workspaceName})`;
+        return `${option.folder} (${workspaceName})`;
     }
 
-    return `${prefix} ${baseTitle} (${detail})`;
+    return `${baseTitle} (${detail})`;
 }
 
 function createKey(
