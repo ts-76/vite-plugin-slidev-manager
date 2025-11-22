@@ -3,12 +3,19 @@ import { createRequire } from 'node:module';
 import type { Plugin, ViteDevServer } from 'vite';
 import { rootDir } from './metadata-loader.js';
 import type { PresentationOption } from './presentation-selector.js';
+import path from 'node:path';
 
-export default function presentationManager(): Plugin {
+export interface PresentationManagerOptions {
+    presentationsDir?: string;
+}
+
+export default function presentationManager(
+    options: PresentationManagerOptions = {},
+): Plugin {
     return {
         name: 'presentation-manager',
         async configureServer(_server: ViteDevServer) {
-            await runSelector('dev');
+            await runSelector('dev', options);
             process.exit(0);
         },
         async buildStart() {
@@ -17,14 +24,17 @@ export default function presentationManager(): Plugin {
                     process.argv.includes('build')) &&
                 !process.argv.includes('export')
             ) {
-                await runSelector('export');
+                await runSelector('export', options);
                 process.exit(0);
             }
         },
     };
 }
 
-async function runSelector(action: 'dev' | 'export') {
+async function runSelector(
+    action: 'dev' | 'export',
+    pluginOptions: PresentationManagerOptions,
+) {
     try {
         const { selectPresentation } = await import(
             './presentation-selector.js'
@@ -40,6 +50,9 @@ async function runSelector(action: 'dev' | 'export') {
                 action === 'dev'
                     ? 'Use arrow keys to pick a presentation, press Enter to launch, or Q to cancel.'
                     : 'Use arrow keys to pick a presentation, press Enter to export, or Q to cancel.',
+            presentationsDir: pluginOptions.presentationsDir
+                ? path.resolve(rootDir, pluginOptions.presentationsDir)
+                : undefined,
         });
 
         if (options.length === 0) {

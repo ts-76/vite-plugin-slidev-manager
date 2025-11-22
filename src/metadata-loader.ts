@@ -15,8 +15,8 @@ export interface PresentationMetadata {
 
 export async function loadPresentationMetadata(
     root: string = process.cwd(),
+    presentationsDir: string = path.join(root, 'presentations'),
 ): Promise<PresentationMetadata[]> {
-    const presentationsDir = path.join(root, 'presentations');
     let entries: Dirent[];
     try {
         entries = await fs.readdir(presentationsDir, { withFileTypes: true });

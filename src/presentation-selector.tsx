@@ -12,6 +12,7 @@ export interface SelectPresentationOptions {
     action: 'dev' | 'export';
     heading: string;
     helpText: string;
+    presentationsDir?: string;
 }
 
 export interface SelectPresentationResult {
@@ -39,8 +40,9 @@ export async function selectPresentation({
     action,
     heading,
     helpText,
+    presentationsDir,
 }: SelectPresentationOptions): Promise<SelectPresentationResult> {
-    const metadata = await loadPresentationMetadata();
+    const metadata = await loadPresentationMetadata(undefined, presentationsDir);
     const options = metadata
         .map((meta) => createOptionFromMetadata(meta, action))
         .filter((opt): opt is PresentationOption => opt !== null);
