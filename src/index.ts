@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 import { rootDir } from './metadata-loader.js';
 import type { PresentationOption } from './presentation-selector.js';
-import path from 'node:path';
 
 export interface PresentationManagerOptions {
     presentationsDir?: string;

@@ -109,14 +109,16 @@ describe('loadPresentationMetadata', () => {
 
         // Mock readdir for custom directory
         // biome-ignore lint/suspicious/noExplicitAny: Mocking complex type
-        (vi.mocked(fs.readdir) as any).mockImplementation(async (dirPath: string) => {
-            if (dirPath === customDir) {
-                return [
-                    { name: 'custom-pres', isDirectory: () => true },
-                ] as unknown as Dirent[];
-            }
-            throw { code: 'ENOENT' };
-        });
+        (vi.mocked(fs.readdir) as any).mockImplementation(
+            async (dirPath: string) => {
+                if (dirPath === customDir) {
+                    return [
+                        { name: 'custom-pres', isDirectory: () => true },
+                    ] as unknown as Dirent[];
+                }
+                throw { code: 'ENOENT' };
+            },
+        );
 
         // Mock readFile/access for custom presentation
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {

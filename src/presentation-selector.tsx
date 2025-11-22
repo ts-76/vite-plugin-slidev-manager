@@ -42,7 +42,10 @@ export async function selectPresentation({
     helpText,
     presentationsDir,
 }: SelectPresentationOptions): Promise<SelectPresentationResult> {
-    const metadata = await loadPresentationMetadata(undefined, presentationsDir);
+    const metadata = await loadPresentationMetadata(
+        undefined,
+        presentationsDir,
+    );
     const options = metadata
         .map((meta) => createOptionFromMetadata(meta, action))
         .filter((opt): opt is PresentationOption => opt !== null);
