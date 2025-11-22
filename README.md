@@ -8,7 +8,7 @@ A Vite plugin for managing multiple Slidev presentations in a monorepo structure
 - **Monorepo Support**: Automatically discovers presentations in a `presentations` directory.
 - **Dev & Export Modes**:
   - **Dev**: Select a presentation to start the Slidev development server (`slidev`).
-  - **Build**: Select a presentation to export (`slidev export`).
+  - **Build**: Select a presentation to export as PDF (`slidev export`).
 - **Seamless Integration**: Hooks directly into Vite's `configureServer` and `buildStart` lifecycles.
 
 ## Installation
@@ -54,7 +54,7 @@ In your root `package.json`, set up the scripts to trigger Vite:
 ### 3. Run
 
 - **Development**: Run `npm run dev`. You will see a list of presentations. Select one to start editing.
-- **Export**: Run `npm run build`. You will see a list of presentations. Select one to build/export.
+- **Export**: Run `npm run build`. You will see a list of presentations. Select one to build/export (currently PDF only).
 
 ## Directory Structure
 
