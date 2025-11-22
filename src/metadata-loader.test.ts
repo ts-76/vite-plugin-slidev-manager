@@ -103,4 +103,49 @@ describe('loadPresentationMetadata', () => {
             title: 'Presentation 2',
         });
     });
+
+    it('should load metadata from custom presentations directory', async () => {
+        const customDir = path.join(mockCwd, 'custom-presentations');
+
+        // Mock readdir for custom directory
+        // biome-ignore lint/suspicious/noExplicitAny: Mocking complex type
+        (vi.mocked(fs.readdir) as any).mockImplementation(
+            async (dirPath: string) => {
+                if (dirPath === customDir) {
+                    return [
+                        { name: 'custom-pres', isDirectory: () => true },
+                    ] as unknown as Dirent[];
+                }
+                throw { code: 'ENOENT' };
+            },
+        );
+
+        // Mock readFile/access for custom presentation
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+            if (
+                typeof filePath === 'string' &&
+                filePath.endsWith('custom-pres/package.json')
+            ) {
+                return JSON.stringify({
+                    name: 'custom-workspace',
+                    title: 'Custom Presentation',
+                });
+            }
+            throw { code: 'ENOENT' };
+        });
+
+        vi.mocked(fs.access).mockRejectedValue({ code: 'ENOENT' });
+
+        const metadata = await loadPresentationMetadata(mockCwd, customDir);
+
+        expect(metadata).toHaveLength(1);
+        expect(metadata[0]).toEqual({
+            folder: 'custom-pres',
+            workspace: 'custom-workspace',
+            scripts: {},
+            slidesPath: null,
+            relativeSlidesPath: null,
+            title: 'Custom Presentation',
+        });
+    });
 });

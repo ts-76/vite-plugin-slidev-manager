@@ -33,7 +33,9 @@ import presentationManager from 'vite-plugin-slidev-manager';
 
 export default defineConfig({
   plugins: [
-    presentationManager()
+    presentationManager({
+      presentationsDir: 'my-presentations' // Optional: default is 'presentations'
+    })
   ]
 });
 ```
