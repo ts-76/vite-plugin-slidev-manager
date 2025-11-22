@@ -84,18 +84,21 @@ async function runCommand(
     const slidevPath = require.resolve('@slidev/cli/bin/slidev.mjs');
 
     let command: { file: string; args: string[] };
-    const slidesPath =
-        selection.relativeSlidesPath || selection.run.relativeSlidesPath;
 
-    if (!slidesPath) {
+    const absoluteSlidesPath = selection.slidesPath;
+
+    if (!absoluteSlidesPath) {
         console.error('Could not determine slides path for selection');
         return 1;
     }
 
+    const cwd = path.dirname(absoluteSlidesPath);
+    const slidesArg = path.basename(absoluteSlidesPath);
+
     if (action === 'dev') {
         command = {
             file: 'node',
-            args: [slidevPath, slidesPath, '--open'],
+            args: [slidevPath, slidesArg, '--open'],
         };
     } else {
         command = {
@@ -107,14 +110,14 @@ async function runCommand(
                 '60000',
                 '--wait-until',
                 'domcontentloaded',
-                slidesPath,
+                slidesArg,
             ],
         };
     }
 
     return new Promise<number>((resolve) => {
         const child = spawn(command.file, command.args, {
-            cwd: rootDir,
+            cwd,
             stdio: 'inherit',
             env: { ...process.env, NODE_ENV: 'development' },
         });
