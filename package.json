@@ -51,6 +51,6 @@
         "vitest": "^4.0.13"
     },
     "overrides": {
-        "monaco-editor": "^0.55.0-rc"
+        "monaco-editor": "^0.55.1"
     }
 }
