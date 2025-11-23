@@ -3,7 +3,15 @@
 
 ## v0.0.7
 
-[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.5...v0.0.7)
+[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.6...v0.0.7)
+
+### 🏡 Chore
+
+- Introduce changelogen for release management ([eb73e07](https://github.com/ts-76/vite-plugin-slidev-manager/commit/eb73e07))
+
+## v0.0.6
+
+[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.5...v0.0.6)
 
 ### 🏡 Chore
 
