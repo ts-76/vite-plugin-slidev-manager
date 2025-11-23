@@ -67,8 +67,20 @@ my-project/
 ├── package.json
 ├── vite.config.ts
 ├── presentations/
-│   ├── my-presentation-1/
-│   │   └── slides.md
 │   └── my-presentation-2/
 │       └── slides.md
+```
+
+## Troubleshooting
+
+### Vulnerability Warnings
+
+If you encounter vulnerability warnings related to `monaco-editor` (via `dompurify`), you can resolve them by adding an override to your project's `package.json`. This is due to a dependency in `monaco-editor` which is used by Slidev.
+
+```json
+{
+  "overrides": {
+    "monaco-editor": "^0.55.1"
+  }
+}
 ```
