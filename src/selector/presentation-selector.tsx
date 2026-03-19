@@ -1,28 +1,39 @@
 import { Box, render, Text, useInput } from 'ink';
+import type { Instance } from 'ink';
 import SelectInput from 'ink-select-input';
 import React, { useMemo } from 'react';
 import {
     loadPresentationMetadata,
+    type PresentationAction,
     type PresentationMetadata,
-} from './metadata-loader.js';
+} from '../presentation/metadata-loader.js';
+import {
+    createPresentationKey,
+    formatPresentationLabel,
+} from '../presentation/presentation-helpers.js';
 
 export { loadPresentationMetadata };
+export type { PresentationAction };
 
 export interface SelectPresentationOptions {
-    action: 'dev' | 'export';
+    action: PresentationAction;
     heading: string;
     helpText: string;
+    projectRoot?: string;
     presentationsDir?: string;
+    preselectedFolder?: string;
 }
 
 export interface SelectPresentationResult {
     options: PresentationOption[];
     selected: PresentationOption | null;
     cancelled: boolean;
+    reason?: 'preselected' | 'single-option' | 'interactive' | 'non-interactive-without-selection';
 }
 
 export interface PresentationOption {
     folder: string;
+    presentationDir: string;
     workspace: string | null;
     title: string | null;
     run: {
@@ -30,7 +41,7 @@ export interface PresentationOption {
         workspace?: string;
         slidesPath?: string;
         relativeSlidesPath?: string;
-        action: 'dev' | 'export';
+        action: PresentationAction;
     };
     slidesPath: string | null;
     relativeSlidesPath: string | null;
@@ -40,12 +51,11 @@ export async function selectPresentation({
     action,
     heading,
     helpText,
+    projectRoot,
     presentationsDir,
+    preselectedFolder,
 }: SelectPresentationOptions): Promise<SelectPresentationResult> {
-    const metadata = await loadPresentationMetadata(
-        undefined,
-        presentationsDir,
-    );
+    const metadata = await loadPresentationMetadata(projectRoot, presentationsDir);
     const options = metadata
         .map((meta) => createOptionFromMetadata(meta, action))
         .filter((opt): opt is PresentationOption => opt !== null);
@@ -54,22 +64,36 @@ export async function selectPresentation({
         return { options, selected: null, cancelled: false };
     }
 
+    if (preselectedFolder) {
+        const selected = options.find((option) => option.folder === preselectedFolder) ?? null;
+        return { options, selected, cancelled: false, reason: 'preselected' };
+    }
+
+    if (options.length === 1) {
+        return { options, selected: options[0] ?? null, cancelled: false, reason: 'single-option' };
+    }
+
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        return {
+            options,
+            selected: null,
+            cancelled: false,
+            reason: 'non-interactive-without-selection',
+        };
+    }
+
     let selected: PresentationOption | null = null;
     let cancelled = false;
+    let app: Instance | undefined;
 
-    // biome-ignore lint/suspicious/noExplicitAny: Ink app instance type is complex
-    let app: any;
     const handleSelect = (option: PresentationOption) => {
         selected = option;
-        if (app) {
-            app.unmount();
-        }
+        app?.unmount();
     };
+
     const handleCancel = () => {
         cancelled = true;
-        if (app) {
-            app.unmount();
-        }
+        app?.unmount();
     };
 
     app = render(
@@ -85,42 +109,34 @@ export async function selectPresentation({
 
     await app.waitUntilExit();
 
-    return { options, selected, cancelled };
+    return { options, selected, cancelled, reason: 'interactive' };
 }
 
 interface SelectorProps {
     options: PresentationOption[];
     heading: string;
     helpText: string;
-    action: 'dev' | 'export';
+    action: PresentationAction;
     onSelect: (option: PresentationOption) => void;
     onCancel: () => void;
 }
 
-function Selector({
-    options,
-    heading,
-    helpText,
-    action,
-    onSelect,
-    onCancel,
-}: SelectorProps) {
+function Selector({ options, heading, helpText, action, onSelect, onCancel }: SelectorProps) {
+    void action;
     useInput((input, key) => {
         if (input === 'q' || key.escape) {
-            if (onCancel) {
-                onCancel();
-            }
+            onCancel();
         }
     });
 
     const items = useMemo(
         () =>
             options.map((option) => ({
-                label: formatLabel(option),
+                label: formatPresentationLabel(option),
                 value: option,
-                key: createKey(option, action),
+                key: createPresentationKey(option),
             })),
-        [options, action],
+        [options],
     );
 
     return React.createElement(
@@ -141,16 +157,38 @@ function Selector({
 
 function createOptionFromMetadata(
     meta: PresentationMetadata,
-    action: 'dev' | 'export',
+    action: PresentationAction,
 ): PresentationOption | null {
-    if (meta.workspace && meta.scripts?.[action]) {
+    if (!meta.availableActions.includes(action)) {
+        return null;
+    }
+
+    if (action === 'dev' && meta.slidesPath) {
         return {
             folder: meta.folder,
+            presentationDir: meta.presentationDir,
+            workspace: meta.workspace,
+            title: meta.title,
+            run: {
+                type: 'slides',
+                slidesPath: meta.slidesPath,
+                relativeSlidesPath: meta.relativeSlidesPath ?? undefined,
+                action,
+            },
+            slidesPath: meta.slidesPath,
+            relativeSlidesPath: meta.relativeSlidesPath,
+        };
+    }
+
+    if (meta.workspace && meta.scripts[action]) {
+        return {
+            folder: meta.folder,
+            presentationDir: meta.presentationDir,
             workspace: meta.workspace,
             title: meta.title,
             run: {
                 type: 'workspace',
-                workspace: meta.workspace ?? undefined,
+                workspace: meta.workspace,
                 action,
             },
             slidesPath: meta.slidesPath,
@@ -161,11 +199,12 @@ function createOptionFromMetadata(
     if (meta.slidesPath) {
         return {
             folder: meta.folder,
+            presentationDir: meta.presentationDir,
             workspace: meta.workspace,
             title: meta.title,
             run: {
                 type: 'slides',
-                slidesPath: meta.slidesPath ?? undefined,
+                slidesPath: meta.slidesPath,
                 relativeSlidesPath: meta.relativeSlidesPath ?? undefined,
                 action,
             },
@@ -175,47 +214,4 @@ function createOptionFromMetadata(
     }
 
     return null;
-}
-
-function formatLabel(option: PresentationOption): string {
-    const workspaceName = option.workspace ?? '';
-    const slugFromWorkspace = workspaceName.includes('/')
-        ? workspaceName.split('/').pop()
-        : workspaceName;
-
-    const baseTitle = option.title ?? option.folder;
-    const detail =
-        option.run.type === 'workspace'
-            ? workspaceName
-            : (option.run.relativeSlidesPath ?? '');
-    if (
-        option.run.type === 'workspace' &&
-        option.title &&
-        slugFromWorkspace &&
-        option.title !== slugFromWorkspace
-    ) {
-        return `${baseTitle} (${slugFromWorkspace})`;
-    }
-
-    if (
-        option.run.type === 'workspace' &&
-        slugFromWorkspace &&
-        slugFromWorkspace !== option.folder
-    ) {
-        return `${option.folder} (${workspaceName})`;
-    }
-
-    return `${baseTitle} (${detail})`;
-}
-
-function createKey(
-    option: PresentationOption,
-    action: 'dev' | 'export',
-): string {
-    const detail =
-        option.run.type === 'workspace'
-            ? (option.run.workspace ?? option.folder)
-            : (option.run.relativeSlidesPath ?? '');
-    const key = `${action}::${option.folder}::${option.run.type}::${detail}`;
-    return key;
 }

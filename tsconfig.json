@@ -7,11 +7,10 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
+        "rootDir": "./src",
         "outDir": "./dist",
         "declaration": true,
         "jsx": "react-jsx"
     },
-    "include": [
-        "src"
-    ]
+    "include": ["src"]
 }

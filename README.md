@@ -1,86 +1,156 @@
 # vite-plugin-slidev-manager
 
-A Vite plugin for managing multiple Slidev presentations in a monorepo structure. It provides an interactive CLI to select and launch presentations for development or export.
+[日本語版 README](docs/ja/README.md)
+
+A Vite plugin for managing multiple Slidev presentations in a monorepo.
 
 ## Features
 
-- **Interactive CLI**: Uses [Ink](https://github.com/vadimdemedes/ink) to provide a user-friendly terminal interface.
-- **Monorepo Support**: Automatically discovers presentations in a `presentations` directory.
-- **Dev & Export Modes**:
-  - **Dev**: Select a presentation to start the Slidev development server (`slidev`).
-  - **Build**: Select a presentation to export as PDF (`slidev export`).
-- **Seamless Integration**: Hooks directly into Vite's `configureServer` and `buildStart` lifecycles.
+- Presentation selector for `dev`, `build`, and `export:browser`
+- Supports both workspace and non-workspace presentation layouts
+- In-page deck switching UI for Slidev decks
+- Slidev CLI argument passthrough
+
+## Requirements
+
+- Node.js version supported by your installed Vite and Slidev versions
+- `vite` `^5 || ^6 || ^7 || ^8`
+- `@slidev/cli` `>=52.14.1`
 
 ## Installation
 
 ```bash
-npm install -D vite-plugin-slidev-manager
-# or
-yarn add -D vite-plugin-slidev-manager
-# or
-pnpm add -D vite-plugin-slidev-manager
+npm install -D vite-plugin-slidev-manager vite @slidev/cli
 ```
 
 ## Usage
 
 ### 1. Configure Vite
 
-Add the plugin to your `vite.config.ts` (or `vite.config.mts`):
-
-```typescript
+```ts
 import { defineConfig } from 'vite';
 import presentationManager from 'vite-plugin-slidev-manager';
 
 export default defineConfig({
-  plugins: [
-    presentationManager({
-      presentationsDir: 'my-presentations' // Optional: default is 'presentations'
-    })
-  ]
+    plugins: [
+        presentationManager({
+            presentationsDir: 'presentations',
+        }),
+    ],
 });
 ```
 
-### 2. Add Scripts
-
-In your root `package.json`, set up the scripts to trigger Vite:
+### 2. Add scripts
 
 ```json
 {
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build"
-  }
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "export:browser": "vite -- --export"
+    }
 }
 ```
 
-### 3. Run
+Use `vite -- --export` instead of `vite export`.
+`vite export` is not a standard Vite command, and this plugin uses the forwarded `--export` flag to switch into browser-export mode.
 
-- **Development**: Run `npm run dev`. You will see a list of presentations. Select one to start editing.
-- **Export**: Run `npm run build`. You will see a list of presentations. Select one to build/export (currently PDF only).
+### 3. Run commands
 
-## Directory Structure
-
-The plugin expects a `presentations` directory in the root of your project. Each subdirectory should contain a Slidev presentation (either a `slides.md` file or a `package.json` defining a workspace).
-
+```bash
+npm run dev
+npm run build
+npm run export:browser
 ```
+
+- `npm run dev`
+    - opens the selector
+    - starts the selected deck behind a stable bridge URL
+    - injects the in-page switcher for decks with `slides.md`
+    - creates `custom-nav-controls.vue` in the active deck only while the dev bridge is running, then removes it on shutdown
+- `npm run build`
+    - opens the selector
+    - runs the `build` script for the selected presentation
+- `npm run export:browser`
+    - opens the selector
+    - opens the selected deck's `/export` page in the browser
+
+### 4. Pass Slidev options
+
+Pass Slidev CLI options after `--`.
+
+```bash
+npm run dev -- -- --port 3030
+npm run build -- -- --base /deck/ --output dist/slides
+npm run export:browser -- -- --export --port 3030
+```
+
+## Expected presentation structure
+
+Each presentation directory should contain either:
+
+- a `slides.md`, or
+- a `package.json` with `dev`, `build`, and/or `export` scripts
+
+```text
 my-project/
 ├── package.json
 ├── vite.config.ts
-├── presentations/
-│   └── my-presentation-2/
-│       └── slides.md
+└── presentations/
+    ├── intro/
+    │   └── slides.md
+    └── advanced/
+        ├── package.json
+        └── slides.md
 ```
 
-## Troubleshooting
+## Generated files during dev
 
-### Vulnerability Warnings
+During `dev`, the plugin temporarily creates a navigation control file only in the active presentation directory:
 
-If you encounter vulnerability warnings related to `monaco-editor` (via `dompurify`), you can resolve them by adding an override to your project's `package.json`. This is due to a dependency in `monaco-editor` which is used by Slidev.
+```text
+<vite-root>/
+└── presentations/
+  └── <active-deck>/
+    └── custom-nav-controls.vue
+```
 
-```json
-{
-  "overrides": {
-    "monaco-editor": "^0.55.1"
-  }
-}
+This file is used to provide navigation controls for deck switching, and it is removed when the dev bridge stops.
+
+## Options
+
+```ts
+presentationManager({
+    presentationsDir: 'presentations',
+});
+```
+
+- `presentationsDir`: directory to scan for presentations. Default: `presentations`
+    - relative paths are resolved from the Vite root
+
+Other options exist for advanced or custom setups, but most users only need `presentationsDir`.
+
+## Directory layout notes
+
+This plugin does not require a VS Code workspace-specific layout.
+It works with a regular directory structure as long as:
+
+- Vite can start from the intended project root
+- `presentationsDir` points to your presentation folders, relative to the Vite root or as an absolute path
+- `@slidev/cli` is resolvable from the project where the plugin runs
+
+This repository includes verified sample layouts under `fixture/`.
+
+- `fixture/normal`: regular directory layout without workspaces
+- `fixture/workspace`: monorepo-style layout with workspaces and shared themes
+
+See `fixture/README.md` for setup and run instructions.
+
+## Development
+
+```bash
+bun install
+bun run test
+bun run lint
+bun run build
 ```

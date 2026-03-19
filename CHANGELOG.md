@@ -1,6 +1,5 @@
 # Changelog
 
-
 ## v0.0.7
 
 [compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.6...v0.0.7)
