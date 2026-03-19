@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { PresentationAction } from './metadata-loader.js';
-import type { PresentationOption } from './presentation-selector.js';
+import type { PresentationOption } from '../selector/presentation-selector.js';
 
 export interface SpawnSpec {
     command: string;
@@ -231,8 +231,11 @@ async function createActionSpawnSpec(
 ): Promise<SpawnSpec> {
     const env = {
         ...process.env,
-        NODE_ENV: 'production',
     };
+
+    if (action === 'build') {
+        env.NODE_ENV = 'production';
+    }
 
     if (selection.run.type === 'workspace') {
         const packageManager = await detectPackageManager(selection.presentationDir);

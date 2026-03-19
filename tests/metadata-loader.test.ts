@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadPresentationMetadata } from '../src/metadata-loader.js';
+import { loadPresentationMetadata } from '../src/presentation/metadata-loader.js';
 
 vi.mock('node:fs/promises');
 

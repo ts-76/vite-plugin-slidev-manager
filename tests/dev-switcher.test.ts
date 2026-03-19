@@ -7,8 +7,8 @@ import {
     generateDevSwitcherFiles,
     SUPPORT_DIR_NAME,
     type DevSwitcherManifest,
-} from '../src/dev-switcher.js';
-import type { DeckEntry } from '../src/generated-switcher-template.js';
+} from '../src/bridge/dev-switcher.js';
+import type { DeckEntry } from '../src/bridge/generated-switcher-template.js';
 
 const TEST_ROOT = path.join(import.meta.dirname, '..', '.test-tmp-dev-switcher');
 
@@ -97,9 +97,9 @@ describe('generateDevSwitcherFiles', () => {
         const content = await fs.readFile(result.navControlsPath, 'utf8');
         expect(content).toContain('<template>');
         expect(content).toContain('method="POST"');
-        expect(content).toContain('formaction="http://localhost:3000/__bridge?folder=intro"');
+        expect(content).toContain('formaction="http://localhost:3000/__bridge/switch?folder=intro"');
         expect(content).toContain(
-            'formaction="http://localhost:3000/__bridge?folder=advanced"',
+            'formaction="http://localhost:3000/__bridge/switch?folder=advanced"',
         );
         expect(content).toContain('smgr-item--active');
     });

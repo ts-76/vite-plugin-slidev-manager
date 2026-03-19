@@ -8,7 +8,7 @@ import {
     formatPresentationLabel,
     type PresentationLabelInput,
     toSlug,
-} from './presentation-helpers.js';
+} from '../presentation/presentation-helpers.js';
 import {
     createDevSpawnSpec,
     openBrowser,
@@ -18,8 +18,9 @@ import {
     shouldOpenBrowser,
     spawnWithSpec,
     waitForHttpReady,
-} from './presentation-runner.js';
-import type { PresentationOption } from './presentation-selector.js';
+} from '../presentation/presentation-runner.js';
+import type { PresentationOption } from '../selector/presentation-selector.js';
+import { getErrorMessage } from '../utils/process-utils.js';
 
 const PUBLIC_HOST = 'localhost';
 const LOG_PREFIX = '[slidev-manager]';
@@ -30,6 +31,7 @@ export interface LaunchContext {
     selected: PresentationOption;
     presentations: PresentationOption[];
     args: string[];
+    devArgs?: string[];
 }
 
 export interface DevServerBridge {
@@ -56,8 +58,9 @@ export function createLaunchContext(
     selected: PresentationOption,
     presentations: PresentationOption[],
     args: string[],
+    devArgs: string[] = args,
 ): LaunchContext {
-    return { selected, presentations, args };
+    return { selected, presentations, args, devArgs };
 }
 
 export async function startDevServerBridge(
@@ -213,7 +216,11 @@ export async function startDevServerBridge(
                 });
             }
 
-            const spec = await createDevSpawnSpec(selection, context.args, upstreamPort);
+            const spec = await createDevSpawnSpec(
+                selection,
+                context.devArgs ?? context.args,
+                upstreamPort,
+            );
 
             console.log(formatManagerLog(`Launching Slidev dev for "${selection.folder}"...`));
 
@@ -222,7 +229,19 @@ export async function startDevServerBridge(
                 console.error(`${LOG_PREFIX} Failed to start dev process:`, error.message);
             });
             process.on('exit', (code, signal) => {
-                if (signal !== 'SIGTERM') {
+                if (currentSession?.process !== process) {
+                    console.log(
+                        formatManagerLog(
+                            `Stopped previous Slidev dev for "${selection.folder}" after switching decks.`,
+                        ),
+                    );
+                } else if (signal === 'SIGTERM') {
+                    console.log(
+                        formatManagerLog(
+                            `Stopped Slidev dev for "${selection.folder}" while closing the manager.`,
+                        ),
+                    );
+                } else {
                     console.log(`${LOG_PREFIX} Slidev dev exited with code ${code ?? 0}`);
                 }
 
@@ -600,19 +619,3 @@ function escapeHtml(value: string): string {
         .replace(/"/g, '&quot;');
 }
 
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    if (
-        typeof error === 'object' &&
-        error !== null &&
-        'message' in error &&
-        typeof error.message === 'string'
-    ) {
-        return error.message;
-    }
-
-    return String(error);
-}

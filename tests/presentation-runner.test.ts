@@ -6,8 +6,8 @@ import {
     createDevSpawnSpec,
     runPresentationAction,
     waitForHttpReady,
-} from '../src/presentation-runner.js';
-import type { PresentationOption } from '../src/presentation-selector.js';
+} from '../src/presentation/presentation-runner.js';
+import type { PresentationOption } from '../src/selector/presentation-selector.js';
 
 const TEST_ROOT = path.join(import.meta.dirname, '..', '.test-tmp-presentation-runner');
 

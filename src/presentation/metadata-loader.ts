@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { getErrorMessage } from '../utils/process-utils.js';
 
 export const rootDir = process.cwd();
 
@@ -192,23 +193,6 @@ function isPresentationAction(value: string): value is PresentationAction {
 
 function hasErrorCode(error: unknown, code: string): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
-
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    if (
-        typeof error === 'object' &&
-        error !== null &&
-        'message' in error &&
-        typeof error.message === 'string'
-    ) {
-        return error.message;
-    }
-
-    return String(error);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

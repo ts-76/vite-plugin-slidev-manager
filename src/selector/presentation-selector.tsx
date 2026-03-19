@@ -6,8 +6,8 @@ import {
     loadPresentationMetadata,
     type PresentationAction,
     type PresentationMetadata,
-} from './metadata-loader.js';
-import { createPresentationKey, formatPresentationLabel } from './presentation-helpers.js';
+} from '../presentation/metadata-loader.js';
+import { createPresentationKey, formatPresentationLabel } from '../presentation/presentation-helpers.js';
 
 export { loadPresentationMetadata };
 export type { PresentationAction };
@@ -17,12 +17,14 @@ export interface SelectPresentationOptions {
     heading: string;
     helpText: string;
     presentationsDir?: string;
+    preselectedFolder?: string;
 }
 
 export interface SelectPresentationResult {
     options: PresentationOption[];
     selected: PresentationOption | null;
     cancelled: boolean;
+    reason?: 'preselected' | 'single-option' | 'interactive' | 'non-interactive-without-selection';
 }
 
 export interface PresentationOption {
@@ -46,6 +48,7 @@ export async function selectPresentation({
     heading,
     helpText,
     presentationsDir,
+    preselectedFolder,
 }: SelectPresentationOptions): Promise<SelectPresentationResult> {
     const metadata = await loadPresentationMetadata(undefined, presentationsDir);
     const options = metadata
@@ -54,6 +57,24 @@ export async function selectPresentation({
 
     if (options.length === 0) {
         return { options, selected: null, cancelled: false };
+    }
+
+    if (preselectedFolder) {
+        const selected = options.find((option) => option.folder === preselectedFolder) ?? null;
+        return { options, selected, cancelled: false, reason: 'preselected' };
+    }
+
+    if (options.length === 1) {
+        return { options, selected: options[0] ?? null, cancelled: false, reason: 'single-option' };
+    }
+
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        return {
+            options,
+            selected: null,
+            cancelled: false,
+            reason: 'non-interactive-without-selection',
+        };
     }
 
     let selected: PresentationOption | null = null;
@@ -83,7 +104,7 @@ export async function selectPresentation({
 
     await app.waitUntilExit();
 
-    return { options, selected, cancelled };
+    return { options, selected, cancelled, reason: 'interactive' };
 }
 
 interface SelectorProps {

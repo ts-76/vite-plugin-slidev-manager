@@ -3,7 +3,7 @@ import {
     renderNavControlComponent,
     type DeckEntry,
     type SwitcherTemplateOptions,
-} from '../src/generated-switcher-template.js';
+} from '../src/bridge/generated-switcher-template.js';
 
 const DECKS: DeckEntry[] = [
     {
@@ -51,12 +51,12 @@ describe('renderNavControlComponent', () => {
     it('renders a submit button for each deck inside the dropdown menu', () => {
         const output = renderNavControlComponent(makeOptions());
 
-        expect(output).toContain('formaction="http://localhost:3000/__bridge?folder=intro"');
+        expect(output).toContain('formaction="http://localhost:3000/__bridge/switch?folder=intro"');
         expect(output).toContain(
-            'formaction="http://localhost:3000/__bridge?folder=advanced"',
+            'formaction="http://localhost:3000/__bridge/switch?folder=advanced"',
         );
         expect(output).toContain(
-            'formaction="http://localhost:3000/__bridge?folder=deep-dive"',
+            'formaction="http://localhost:3000/__bridge/switch?folder=deep-dive"',
         );
         expect(output).toContain('class="smgr-item-title">Intro<');
         expect(output).toContain('class="smgr-item-title">Advanced<');
@@ -88,13 +88,14 @@ describe('renderNavControlComponent', () => {
         expect(output).toContain('name="slidev-manager-switch-target"');
     });
 
-    it('includes a trigger button with a monitor SVG icon', () => {
+    it('includes a compact icon trigger', () => {
         const output = renderNavControlComponent(makeOptions());
 
         expect(output).toContain('class="smgr-trigger"');
+        expect(output).not.toContain('smgr-trigger-badge');
         expect(output).toContain('<svg');
-        expect(output).toContain('width="24"');
-        expect(output).toContain('height="24"');
+        expect(output).toContain('width="18"');
+        expect(output).toContain('height="18"');
         expect(output).toContain('title="Switch deck"');
     });
 
@@ -106,12 +107,18 @@ describe('renderNavControlComponent', () => {
         expect(output).toContain('.smgr-details[open] .smgr-menu-shell');
     });
 
-    it('uses a 40px trigger with 0.5rem padding', () => {
+    it('uses the simpler 40px round trigger and compact menu shell', () => {
         const output = renderNavControlComponent(makeOptions());
 
         expect(output).toContain('width: 40px;');
         expect(output).toContain('height: 40px;');
         expect(output).toContain('padding: 0.5rem;');
+        expect(output).toContain('border-radius: 999px;');
+        expect(output).toContain('padding: 0.65rem;');
+        expect(output).toContain('font-size: 12px;');
+        expect(output).toContain('--smgr-surface: #ffffff;');
+        expect(output).toContain('--smgr-surface: #000000;');
+        expect(output).not.toContain('class="smgr-menu-header"');
     });
 
     it('escapes HTML entities in deck labels', () => {
@@ -137,54 +144,41 @@ describe('renderNavControlComponent', () => {
         expect(output).toContain('&lt;script&gt;');
     });
 
-    it('escapes HTML attribute characters in folder names', () => {
+    it('escapes special characters in folder names used in formaction', () => {
         const decks: DeckEntry[] = [
             {
                 folder: 'a"b<c',
-                label: 'Test',
-                slug: 'safe-slug',
-                title: 'Test',
-                detail: 'presentations/a"b<c/slides.md',
+                label: 'Quoted',
+                slug: 'quoted',
+                title: 'Quoted',
+                detail: 'presentations/quoted/slides.md',
             },
             {
-                folder: 'other',
-                label: 'Other',
-                slug: 'other',
-                title: 'Other',
-                detail: 'presentations/other/slides.md',
+                folder: 'safe',
+                label: 'Safe',
+                slug: 'safe',
+                title: 'Safe',
+                detail: 'presentations/safe/slides.md',
             },
         ];
-        const output = renderNavControlComponent(makeOptions({ decks, currentSlug: 'other' }));
+        const output = renderNavControlComponent(makeOptions({ decks }));
 
-        expect(output).toContain('formaction="http://localhost:3000/__bridge?folder=a%22b%3Cc"');
+        expect(output).toContain('a%22b%3Cc');
+        expect(output).not.toContain('a"b<c');
     });
 
-    it('produces identical output for the same input', () => {
-        const opts = makeOptions();
-        expect(renderNavControlComponent(opts)).toBe(renderNavControlComponent(opts));
+    it('returns an empty template when there is only one deck', () => {
+        const output = renderNavControlComponent(makeOptions({ decks: [DECKS[0]!] }));
+
+        expect(output.trim()).toBe('<template />');
     });
 
-    it('returns an empty template when only one deck is available', () => {
-        const output = renderNavControlComponent(
-            makeOptions({
-                decks: [
-                    {
-                        folder: 'intro',
-                        label: 'Intro',
-                        slug: 'intro',
-                        title: 'Intro',
-                        detail: 'presentations/intro/slides.md',
-                    },
-                ],
-            }),
-        );
+    it('is deterministic for the same input', () => {
+        const options = makeOptions({ currentSlug: 'advanced' });
 
-        expect(output).toBe('<template />\n');
-    });
+        const first = renderNavControlComponent(options);
+        const second = renderNavControlComponent(options);
 
-    it('contains the generated marker comment', () => {
-        const output = renderNavControlComponent(makeOptions());
-
-        expect(output).toContain('Generated by vite-plugin-slidev-manager');
+        expect(second).toBe(first);
     });
 });

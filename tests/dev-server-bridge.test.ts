@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LaunchContext } from '../src/dev-server-bridge.js';
-import { createLaunchContext, startDevServerBridge } from '../src/dev-server-bridge.js';
-import type { PresentationOption } from '../src/presentation-selector.js';
+import type { LaunchContext } from '../src/bridge/dev-server-bridge.js';
+import { createLaunchContext, startDevServerBridge } from '../src/bridge/dev-server-bridge.js';
+import type { PresentationOption } from '../src/selector/presentation-selector.js';
 
 const TEST_ROOT = path.join(import.meta.dirname, '..', '.test-tmp-dev-server-bridge');
 
@@ -103,6 +103,7 @@ describe('createLaunchContext', () => {
             selected,
             presentations: all,
             args,
+            devArgs: args,
         });
     });
 });

@@ -1,6 +1,6 @@
 {
     "name": "vite-plugin-slidev-manager",
-    "version": "0.0.7",
+    "version": "0.1.0",
     "description": "A Vite plugin for managing multiple Slidev presentations in a monorepo structure.",
     "keywords": [
         "manager",
@@ -46,8 +46,6 @@
         "changelogen": "^0.6.2",
         "oxfmt": "^0.41.0",
         "oxlint": "^1.56.0",
-        "playwright-chromium": "^1.58.2",
-        "puppeteer": "^24.39.1",
         "typescript": "^5.9.3",
         "vite": "^8.0.0",
         "vitest": "^4.1.0"

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { PresentationMetadata } from '../src/metadata-loader.js';
+import type { PresentationMetadata } from '../src/presentation/metadata-loader.js';
 import {
     createPresentationKey,
     formatPresentationLabel,
     toPresentationManifest,
     toSlug,
     type PresentationLabelInput,
-} from '../src/presentation-helpers.js';
+} from '../src/presentation/presentation-helpers.js';
 
 describe('toSlug', () => {
     it('uses folder name when workspace is null', () => {
