@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveInvocation } from './index.js';
+import { resolveInvocation } from '../src/index.js';
 
 describe('resolveInvocation', () => {
     it('uses the default dev command and args when no passthrough args are provided', () => {
@@ -45,6 +45,7 @@ describe('resolveInvocation', () => {
                 '60000',
                 '--wait-until',
                 'domcontentloaded',
+                '--output',
                 'custom.pdf',
             ],
         });

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { PresentationMetadata } from './metadata-loader.js';
+import type { PresentationMetadata } from '../src/metadata-loader.js';
 import {
     createPresentationKey,
     formatPresentationLabel,
     toPresentationManifest,
     toSlug,
     type PresentationLabelInput,
-} from './presentation-helpers.js';
+} from '../src/presentation-helpers.js';
 
 describe('toSlug', () => {
     it('uses folder name when workspace is null', () => {
@@ -144,6 +144,7 @@ describe('toPresentationManifest', () => {
     const metadataFixtures: PresentationMetadata[] = [
         {
             folder: 'intro',
+            presentationDir: '/root/presentations/intro',
             workspace: '@acme/intro-deck',
             scripts: { dev: 'slidev dev', build: 'slidev build' },
             availableActions: ['dev', 'build'],
@@ -153,6 +154,7 @@ describe('toPresentationManifest', () => {
         },
         {
             folder: 'advanced',
+            presentationDir: '/root/presentations/advanced',
             workspace: null,
             scripts: {},
             availableActions: ['dev', 'build', 'export'],
@@ -162,6 +164,7 @@ describe('toPresentationManifest', () => {
         },
         {
             folder: 'export-only',
+            presentationDir: '/root/presentations/export-only',
             workspace: 'export-pkg',
             scripts: { export: 'slidev export' },
             availableActions: ['export'],
@@ -184,7 +187,7 @@ describe('toPresentationManifest', () => {
 
     it('assigns stable slugs', () => {
         const manifest = toPresentationManifest(metadataFixtures);
-        expect(manifest.map((e) => e.slug)).toEqual(['intro-deck', 'advanced', 'export-pkg']);
+        expect(manifest.map((entry) => entry.slug)).toEqual(['intro-deck', 'advanced', 'export-pkg']);
     });
 
     it('sets capability flags correctly', () => {
@@ -197,19 +200,19 @@ describe('toPresentationManifest', () => {
     it('filters to dev-capable entries only', () => {
         const devOnly = toPresentationManifest(metadataFixtures, { canDev: true });
         expect(devOnly).toHaveLength(2);
-        expect(devOnly.every((e) => e.canDev)).toBe(true);
+        expect(devOnly.every((entry) => entry.canDev)).toBe(true);
     });
 
     it('filters to export-capable entries only', () => {
         const exportable = toPresentationManifest(metadataFixtures, { canExport: true });
         expect(exportable).toHaveLength(2);
-        expect(exportable.every((e) => e.canExport)).toBe(true);
+        expect(exportable.every((entry) => entry.canExport)).toBe(true);
     });
 
     it('filters entries that cannot dev', () => {
         const noDev = toPresentationManifest(metadataFixtures, { canDev: false });
         expect(noDev).toHaveLength(1);
-        expect(noDev[0]!.folder).toBe('export-only');
+        expect(noDev[0]?.folder).toBe('export-only');
     });
 
     it('supports combined filter flags', () => {
@@ -231,7 +234,7 @@ describe('toPresentationManifest', () => {
 
     it('produces labels consistent with formatPresentationLabel', () => {
         const manifest = toPresentationManifest(metadataFixtures);
-        const introEntry = manifest.find((e) => e.folder === 'intro')!;
+        const introEntry = manifest.find((entry) => entry.folder === 'intro');
 
         const directLabel = formatPresentationLabel({
             folder: 'intro',
@@ -240,12 +243,12 @@ describe('toPresentationManifest', () => {
             run: { type: 'workspace', workspace: '@acme/intro-deck', action: 'dev' },
         });
 
-        expect(introEntry.label).toBe(directLabel);
+        expect(introEntry?.label).toBe(directLabel);
     });
 
     it('produces keys consistent with createPresentationKey', () => {
         const manifest = toPresentationManifest(metadataFixtures);
-        const advancedEntry = manifest.find((e) => e.folder === 'advanced')!;
+        const advancedEntry = manifest.find((entry) => entry.folder === 'advanced');
 
         const directKey = createPresentationKey({
             folder: 'advanced',
@@ -258,6 +261,6 @@ describe('toPresentationManifest', () => {
             },
         });
 
-        expect(advancedEntry.key).toBe(directKey);
+        expect(advancedEntry?.key).toBe(directKey);
     });
 });

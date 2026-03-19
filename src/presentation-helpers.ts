@@ -132,5 +132,9 @@ function metadataToManifestEntry(meta: PresentationMetadata): DevManifestEntry {
 }
 
 function stripWorkspaceScope(workspace: string): string {
-    return workspace.includes('/') ? workspace.split('/').pop()! : workspace;
+    if (!workspace.includes('/')) {
+        return workspace;
+    }
+
+    return workspace.split('/').pop() ?? workspace;
 }
