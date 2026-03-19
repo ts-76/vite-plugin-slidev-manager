@@ -3,8 +3,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getErrorMessage } from '../utils/process-utils.js';
 
-export const rootDir = process.cwd();
-
 export type PresentationAction = 'dev' | 'build' | 'export';
 const presentationActions: PresentationAction[] = ['dev', 'build', 'export'];
 

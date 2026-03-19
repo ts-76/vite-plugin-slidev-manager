@@ -1,0 +1,23 @@
+{
+    "name": "slides-monorepo",
+    "private": true,
+    "workspaces": [
+        "presentations/*",
+        "themes/*"
+    ],
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "export:browser": "vite -- --export"
+    },
+    "devDependencies": {
+        "@playwright/cli": "^0.1.1",
+        "@slidev/cli": "^52.14.1",
+        "playwright-chromium": "^1.57.0",
+        "vite": "^8.0.0",
+        "vite-plugin-slidev-manager": "link:vite-plugin-slidev-manager"
+    },
+    "overrides": {
+        "monaco-editor": "^0.55.1"
+    }
+}

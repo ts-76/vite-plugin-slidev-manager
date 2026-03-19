@@ -1,0 +1,17 @@
+{
+    "name": "slidev-manager-normal-sample",
+    "private": true,
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "export:browser": "vite -- --export"
+    },
+    "dependencies": {
+        "@slidev/theme-default": "^0.25.0"
+    },
+    "devDependencies": {
+        "@slidev/cli": "^52.14.1",
+        "vite": "^8.0.0",
+        "vite-plugin-slidev-manager": "^0.1.0"
+    }
+}

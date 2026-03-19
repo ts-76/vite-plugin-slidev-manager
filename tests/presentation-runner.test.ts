@@ -134,7 +134,9 @@ describe('waitForHttpReady', () => {
         });
 
         try {
-            await expect(waitForHttpReady(`http://127.0.0.1:${port}/`, 1000)).resolves.toBeUndefined();
+            await expect(
+                waitForHttpReady(`http://127.0.0.1:${port}/`, 1000),
+            ).resolves.toBeUndefined();
         } finally {
             await new Promise<void>((resolve) => {
                 server.close(() => resolve());

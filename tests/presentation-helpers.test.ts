@@ -187,7 +187,11 @@ describe('toPresentationManifest', () => {
 
     it('assigns stable slugs', () => {
         const manifest = toPresentationManifest(metadataFixtures);
-        expect(manifest.map((entry) => entry.slug)).toEqual(['intro-deck', 'advanced', 'export-pkg']);
+        expect(manifest.map((entry) => entry.slug)).toEqual([
+            'intro-deck',
+            'advanced',
+            'export-pkg',
+        ]);
     });
 
     it('sets capability flags correctly', () => {

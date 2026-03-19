@@ -7,7 +7,10 @@ import {
     type PresentationAction,
     type PresentationMetadata,
 } from '../presentation/metadata-loader.js';
-import { createPresentationKey, formatPresentationLabel } from '../presentation/presentation-helpers.js';
+import {
+    createPresentationKey,
+    formatPresentationLabel,
+} from '../presentation/presentation-helpers.js';
 
 export { loadPresentationMetadata };
 export type { PresentationAction };
@@ -16,6 +19,7 @@ export interface SelectPresentationOptions {
     action: PresentationAction;
     heading: string;
     helpText: string;
+    projectRoot?: string;
     presentationsDir?: string;
     preselectedFolder?: string;
 }
@@ -47,10 +51,11 @@ export async function selectPresentation({
     action,
     heading,
     helpText,
+    projectRoot,
     presentationsDir,
     preselectedFolder,
 }: SelectPresentationOptions): Promise<SelectPresentationResult> {
-    const metadata = await loadPresentationMetadata(undefined, presentationsDir);
+    const metadata = await loadPresentationMetadata(projectRoot, presentationsDir);
     const options = metadata
         .map((meta) => createOptionFromMetadata(meta, action))
         .filter((opt): opt is PresentationOption => opt !== null);

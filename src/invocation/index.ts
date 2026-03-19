@@ -17,9 +17,7 @@ export function resolveInvocation(
 ): SlidevInvocation {
     const cliArgs = extractSlidevCliArgs(argv);
     const browserExport = cliArgs.includes(browserExportFlag);
-    const userArgs = browserExport
-        ? cliArgs.filter((arg) => arg !== browserExportFlag)
-        : cliArgs;
+    const userArgs = browserExport ? cliArgs.filter((arg) => arg !== browserExportFlag) : cliArgs;
     const action = browserExport ? 'export' : defaultAction;
 
     return {

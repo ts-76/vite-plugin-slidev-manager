@@ -14,10 +14,15 @@ export interface PresentationManagerOptions {
 export { resolveInvocation } from './invocation/index.js';
 
 export default function presentationManager(options: PresentationManagerOptions = {}): Plugin {
+    let viteRoot = process.cwd();
+
     return {
         name: 'presentation-manager',
+        configResolved(config) {
+            viteRoot = config.root;
+        },
         async configureServer(_server: ViteDevServer) {
-            await runDevSelector(resolveInvocation('dev', options), options);
+            await runDevSelector(resolveInvocation('dev', options), options, viteRoot);
         },
         async buildStart() {
             if (!process.argv.includes('build')) {
@@ -27,6 +32,7 @@ export default function presentationManager(options: PresentationManagerOptions 
             const exitCode = await runBuildSelector(
                 resolveInvocation(options.defaultBuildCommand ?? 'build', options),
                 options,
+                viteRoot,
             );
             process.exit(exitCode);
         },

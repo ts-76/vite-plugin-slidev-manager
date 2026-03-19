@@ -30,6 +30,7 @@ const ANSI_RESET = '\u001B[0m';
 export interface LaunchContext {
     selected: PresentationOption;
     presentations: PresentationOption[];
+    projectRoot: string;
     args: string[];
     devArgs?: string[];
 }
@@ -57,10 +58,11 @@ interface DevSession {
 export function createLaunchContext(
     selected: PresentationOption,
     presentations: PresentationOption[],
+    projectRoot: string,
     args: string[],
     devArgs: string[] = args,
 ): LaunchContext {
-    return { selected, presentations, args, devArgs };
+    return { selected, presentations, projectRoot, args, devArgs };
 }
 
 export async function startDevServerBridge(
@@ -124,9 +126,7 @@ export async function startDevServerBridge(
             }
 
             console.log(
-                formatManagerLog(
-                    `Switching from "${currentSelection.folder}" to "${folder}"...`,
-                ),
+                formatManagerLog(`Switching from "${currentSelection.folder}" to "${folder}"...`),
             );
 
             try {
@@ -246,7 +246,6 @@ export async function startDevServerBridge(
                 }
 
                 if (currentSession?.process === process) {
-                    currentSession = null;
                     void stopBridge(code ?? 0);
                 }
             });
@@ -397,13 +396,10 @@ async function proxyWebSocketUpgrade(
         return;
     }
 
-    await proxyWebSocketUpgradeWithHosts(
-        req,
-        socket,
-        head,
-        upstreamPort,
-        ['127.0.0.1', 'localhost'],
-    );
+    await proxyWebSocketUpgradeWithHosts(req, socket, head, upstreamPort, [
+        '127.0.0.1',
+        'localhost',
+    ]);
 }
 
 async function readRequestBody(req: http.IncomingMessage): Promise<Buffer> {
@@ -618,4 +614,3 @@ function escapeHtml(value: string): string {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 }
-

@@ -7,13 +7,21 @@ import { createLaunchContext, startDevServerBridge } from '../src/bridge/dev-ser
 import type { PresentationOption } from '../src/selector/presentation-selector.js';
 
 const TEST_ROOT = path.join(import.meta.dirname, '..', '.test-tmp-dev-server-bridge');
+const spawnedChildren: Array<{
+    exitCode: number | null;
+    killed: boolean;
+    on(event: string, cb: (...args: unknown[]) => void): void;
+    once(event: string, cb: (...args: unknown[]) => void): void;
+    kill(signal: string): void;
+    unref(): undefined;
+}> = [];
 
 vi.mock('node:child_process', () => {
     return {
         spawn: vi.fn(() => {
             const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
 
-            return {
+            const child = {
                 exitCode: null as number | null,
                 killed: false,
                 on(event: string, cb: (...args: unknown[]) => void) {
@@ -42,6 +50,10 @@ vi.mock('node:child_process', () => {
                     return undefined;
                 },
             };
+
+            spawnedChildren.push(child);
+
+            return child;
         }),
     };
 });
@@ -70,19 +82,22 @@ function request(
     pathValue: string,
 ): Promise<{ status: number; body: unknown }> {
     return new Promise((resolve, reject) => {
-        const req = http.request({ hostname: '127.0.0.1', port, path: pathValue, method }, (res) => {
-            let data = '';
-            res.on('data', (chunk: Buffer) => {
-                data += chunk.toString();
-            });
-            res.on('end', () => {
-                const contentType = String(res.headers['content-type'] ?? '');
-                resolve({
-                    status: res.statusCode ?? 0,
-                    body: contentType.includes('application/json') ? JSON.parse(data) : data,
+        const req = http.request(
+            { hostname: '127.0.0.1', port, path: pathValue, method },
+            (res) => {
+                let data = '';
+                res.on('data', (chunk: Buffer) => {
+                    data += chunk.toString();
                 });
-            });
-        });
+                res.on('end', () => {
+                    const contentType = String(res.headers['content-type'] ?? '');
+                    resolve({
+                        status: res.statusCode ?? 0,
+                        body: contentType.includes('application/json') ? JSON.parse(data) : data,
+                    });
+                });
+            },
+        );
         req.on('error', reject);
         req.end();
     });
@@ -95,13 +110,15 @@ describe('createLaunchContext', () => {
             selected,
             makePresentationOption('deck-b', '/root/presentations/deck-b/slides.md'),
         ];
+        const projectRoot = '/root';
         const args = ['--port', '3030', '--open'];
 
-        const context = createLaunchContext(selected, all, args);
+        const context = createLaunchContext(selected, all, projectRoot, args);
 
         expect(context).toEqual({
             selected,
             presentations: all,
+            projectRoot,
             args,
             devArgs: args,
         });
@@ -119,6 +136,7 @@ describe('startDevServerBridge', () => {
 
     beforeEach(async () => {
         vi.clearAllMocks();
+        spawnedChildren.length = 0;
         deckARoot = path.join(TEST_ROOT, `deck-a-${Date.now()}`);
         deckBRoot = path.join(TEST_ROOT, `deck-b-${Date.now()}`);
         await fs.mkdir(deckARoot, { recursive: true });
@@ -128,7 +146,7 @@ describe('startDevServerBridge', () => {
 
         const deckA = makePresentationOption('deck-a', path.join(deckARoot, 'slides.md'));
         const deckB = makePresentationOption('deck-b', path.join(deckBRoot, 'slides.md'));
-        context = createLaunchContext(deckA, [deckA, deckB], ['--port', '0']);
+        context = createLaunchContext(deckA, [deckA, deckB], TEST_ROOT, ['--port', '0']);
         upstreamServers = [];
         deckAPort = await startUpstreamServer('deck-a', upstreamServers);
         deckBPort = await startUpstreamServer('deck-b', upstreamServers);
@@ -166,9 +184,6 @@ describe('startDevServerBridge', () => {
             const root = await request(bridge.bridgePort, 'GET', '/');
             expect(root.status).toBe(200);
             expect(root.body).toBe('deck:deck-a');
-            await expect(
-                fs.access(path.join(deckARoot, '.slidev-manager', 'manifest.json')),
-            ).resolves.toBeUndefined();
             await expect(
                 fs.access(path.join(deckARoot, 'custom-nav-controls.vue')),
             ).resolves.toBeUndefined();
@@ -292,6 +307,21 @@ describe('startDevServerBridge', () => {
         } finally {
             await bridge.stop();
         }
+    });
+
+    it('cleans generated files when the active Slidev process exits on its own', async () => {
+        const bridge = await startDevServerBridge(context, makeRuntime(upstreamPorts));
+
+        const activeChild = spawnedChildren[0];
+        expect(activeChild).toBeDefined();
+        await expect(
+            fs.access(path.join(deckARoot, 'custom-nav-controls.vue')),
+        ).resolves.toBeUndefined();
+
+        activeChild?.kill('SIGTERM');
+
+        await expect(bridge.waitUntilStopped()).resolves.toBe(0);
+        await waitForMissing(path.join(deckARoot, 'custom-nav-controls.vue'));
     });
 });
 

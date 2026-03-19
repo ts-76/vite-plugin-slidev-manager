@@ -2,7 +2,6 @@ import path from 'node:path';
 import { createLaunchContext, startDevServerBridge } from '../bridge/dev-server-bridge.js';
 import type { SlidevInvocation } from '../invocation/index.js';
 import { convertExportArgsToDevArgs } from '../invocation/index.js';
-import { rootDir } from '../presentation/metadata-loader.js';
 import { getErrorMessage, restoreTerminalInput } from '../utils/process-utils.js';
 import { openBrowser, runPresentationAction } from '../presentation/presentation-runner.js';
 import type { PresentationOption } from './presentation-selector.js';
@@ -16,6 +15,7 @@ const presentationEnvVar = 'SLIDEV_MANAGER_PRESENTATION';
 export async function runDevSelector(
     invocation: SlidevInvocation,
     pluginOptions: PresentationManagerOptions,
+    viteRoot: string = process.cwd(),
 ) {
     try {
         const { selectPresentation } = await import('./presentation-selector.js');
@@ -24,7 +24,8 @@ export async function runDevSelector(
             action: invocation.action,
             heading: getHeading(invocation.action),
             helpText: getHelpText(invocation.action),
-            presentationsDir: resolvePresentationsDir(pluginOptions),
+            projectRoot: viteRoot,
+            presentationsDir: resolvePresentationsDir(pluginOptions, viteRoot),
             preselectedFolder,
         });
 
@@ -46,6 +47,7 @@ export async function runDevSelector(
             createLaunchContext(
                 selected,
                 options,
+                viteRoot,
                 invocation.args,
                 invocation.browserExport
                     ? convertExportArgsToDevArgs(invocation.args)
@@ -58,7 +60,9 @@ export async function runDevSelector(
         if (invocation.browserExport) {
             try {
                 await openBrowser(`http://localhost:${bridge.bridgePort}/export`);
-                console.log(`Opened browser exporter at http://localhost:${bridge.bridgePort}/export`);
+                console.log(
+                    `Opened browser exporter at http://localhost:${bridge.bridgePort}/export`,
+                );
             } catch (error: unknown) {
                 console.error('Failed to open browser exporter:', getErrorMessage(error));
                 await bridge.stop();
@@ -76,6 +80,7 @@ export async function runDevSelector(
 export async function runBuildSelector(
     invocation: SlidevInvocation,
     pluginOptions: PresentationManagerOptions,
+    viteRoot: string = process.cwd(),
 ): Promise<number> {
     try {
         const { selectPresentation } = await import('./presentation-selector.js');
@@ -84,7 +89,8 @@ export async function runBuildSelector(
             action: invocation.action,
             heading: getHeading(invocation.action),
             helpText: getHelpText(invocation.action),
-            presentationsDir: resolvePresentationsDir(pluginOptions),
+            projectRoot: viteRoot,
+            presentationsDir: resolvePresentationsDir(pluginOptions, viteRoot),
             preselectedFolder,
         });
 
@@ -95,28 +101,42 @@ export async function runBuildSelector(
             return 0;
         }
 
-        return await runCommand(selected, invocation);
+        return await runCommand(selected, invocation, viteRoot);
     } catch (error: unknown) {
         console.error('Failed to run presentation selector:', getErrorMessage(error));
         return 1;
     }
 }
 
-async function runCommand(selection: PresentationOption, invocation: SlidevInvocation) {
+async function runCommand(
+    selection: PresentationOption,
+    invocation: SlidevInvocation,
+    viteRoot: string,
+) {
     if (invocation.action === 'dev') {
         throw new Error('runCommand does not support dev invocations');
     }
 
     if (invocation.browserExport) {
-        return runBrowserExport(selection, invocation.args);
+        return runBrowserExport(selection, invocation.args, viteRoot);
     }
 
     return runPresentationAction(selection, invocation.action, invocation.args);
 }
 
-async function runBrowserExport(selection: PresentationOption, args: string[]): Promise<number> {
+async function runBrowserExport(
+    selection: PresentationOption,
+    args: string[],
+    viteRoot: string,
+): Promise<number> {
     const bridge = await startDevServerBridge(
-        createLaunchContext(selection, [selection], args, convertExportArgsToDevArgs(args)),
+        createLaunchContext(
+            selection,
+            [selection],
+            viteRoot,
+            args,
+            convertExportArgsToDevArgs(args),
+        ),
     );
 
     registerBridgeShutdown(bridge);
@@ -133,15 +153,16 @@ async function runBrowserExport(selection: PresentationOption, args: string[]): 
     return bridge.waitUntilStopped();
 }
 
-
 function readPreselectedPresentation(): string | undefined {
     const value = process.env[presentationEnvVar]?.trim();
     return value ? value : undefined;
 }
 
-function resolvePresentationsDir(pluginOptions: PresentationManagerOptions): string | undefined {
+export function resolvePresentationsDir(
+    pluginOptions: PresentationManagerOptions,
+    viteRoot: string,
+): string | undefined {
     return pluginOptions.presentationsDir
-        ? path.resolve(rootDir, pluginOptions.presentationsDir)
+        ? path.resolve(viteRoot, pluginOptions.presentationsDir)
         : undefined;
 }
-

@@ -17,14 +17,7 @@ describe('resolveInvocation', () => {
 
     it('allows switching dev flow to browser export via forwarded CLI arguments', () => {
         expect(
-            resolveInvocation('dev', {}, [
-                'node',
-                'vite',
-                '--',
-                '--export',
-                '--output',
-                'deck',
-            ]),
+            resolveInvocation('dev', {}, ['node', 'vite', '--', '--export', '--output', 'deck']),
         ).toEqual({
             action: 'export',
             args: ['--timeout', '60000', '--wait-until', 'domcontentloaded', '--output', 'deck'],
@@ -71,7 +64,15 @@ describe('resolveInvocation', () => {
             ]),
         ).toEqual({
             action: 'export',
-            args: ['--timeout', '60000', '--wait-until', 'domcontentloaded', '--open=false', '--port', '4040'],
+            args: [
+                '--timeout',
+                '60000',
+                '--wait-until',
+                'domcontentloaded',
+                '--open=false',
+                '--port',
+                '4040',
+            ],
             browserExport: true,
         });
     });

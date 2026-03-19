@@ -1,15 +1,15 @@
 # vite-plugin-slidev-manager
 
-A Vite plugin for managing multiple Slidev presentations in a monorepo. It shows a presentation selector before `vite` / `vite build`, launches the selected deck, and provides a stable bridge URL for dev-time deck switching.
+[日本語版 README](docs/ja/README.md)
+
+A Vite plugin for managing multiple Slidev presentations in a monorepo.
 
 ## Features
 
-- Presentation selector for `dev`, `build`, and browser export flows
-- Monorepo-aware execution for `slides.md` decks and workspace-script decks
-- Stable dev bridge with in-page deck switching UI for Slidev decks
-- Safe behavior in non-interactive environments
+- Presentation selector for `dev`, `build`, and `export:browser`
+- Supports both workspace and non-workspace presentation layouts
+- In-page deck switching UI for Slidev decks
 - Slidev CLI argument passthrough
-- Custom `presentationsDir` support
 
 ## Requirements
 
@@ -28,28 +28,27 @@ npm install -D vite-plugin-slidev-manager vite @slidev/cli
 ### 1. Configure Vite
 
 ```ts
-import { defineConfig } from 'vite'
-import presentationManager from 'vite-plugin-slidev-manager'
+import { defineConfig } from 'vite';
+import presentationManager from 'vite-plugin-slidev-manager';
 
 export default defineConfig({
-  plugins: [
-    presentationManager({
-      presentationsDir: 'presentations',
-      defaultBuildCommand: 'build',
-    }),
-  ],
-})
+    plugins: [
+        presentationManager({
+            presentationsDir: 'presentations',
+        }),
+    ],
+});
 ```
 
 ### 2. Add scripts
 
 ```json
 {
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "export:browser": "vite -- --export"
-  }
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "export:browser": "vite -- --export"
+    }
 }
 ```
 
@@ -65,16 +64,16 @@ npm run export:browser
 ```
 
 - `npm run dev`
-  - opens the selector
-  - starts the selected deck behind a stable bridge URL
-  - injects the in-page switcher for decks with `slides.md`
+    - opens the selector
+    - starts the selected deck behind a stable bridge URL
+    - injects the in-page switcher for decks with `slides.md`
+    - creates `custom-nav-controls.vue` in the active deck only while the dev bridge is running, then removes it on shutdown
 - `npm run build`
-  - opens the selector
-  - runs `slidev build` or the selected workspace `build` script
+    - opens the selector
+    - runs the `build` script for the selected presentation
 - `npm run export:browser`
-  - opens the selector
-  - starts the dev bridge
-  - opens the selected deck's `/export` page in the browser
+    - opens the selector
+    - opens the selected deck's `/export` page in the browser
 
 ### 4. Pass Slidev options
 
@@ -84,27 +83,6 @@ Pass Slidev CLI options after `--`.
 npm run dev -- -- --port 3030
 npm run build -- -- --base /deck/ --output dist/slides
 npm run export:browser -- -- --export --port 3030
-```
-
-You can also define default Slidev arguments in plugin options:
-
-```ts
-presentationManager({
-  devArgs: ['--remote', 'secret'],
-  buildArgs: ['--base', '/deck/'],
-  exportArgs: ['--output', 'slides.pdf'],
-  defaultBuildCommand: 'build',
-})
-```
-
-## Non-interactive environments
-
-When no TTY is available, the plugin does not render the Ink selector.
-Set the target deck explicitly instead:
-
-```bash
-SLIDEV_MANAGER_PRESENTATION=minimal-demo npm run build
-SLIDEV_MANAGER_PRESENTATION=minimal-demo npm run export:browser
 ```
 
 ## Expected presentation structure
@@ -126,51 +104,47 @@ my-project/
         └── slides.md
 ```
 
-When `slides.md` exists, the presentation is available for direct Slidev `dev` / `build` / `export` flows. When only `package.json` exists, availability is inferred from the scripts present in that package.
+## Generated files during dev
+
+During `dev`, the plugin temporarily creates a navigation control file only in the active presentation directory:
+
+```text
+<vite-root>/
+└── presentations/
+  └── <active-deck>/
+    └── custom-nav-controls.vue
+```
+
+This file is used to provide navigation controls for deck switching, and it is removed when the dev bridge stops.
 
 ## Options
 
 ```ts
 presentationManager({
-  presentationsDir: 'presentations',
-  defaultBuildCommand: 'build',
-  devArgs: [],
-  buildArgs: [],
-  exportArgs: [],
-})
+    presentationsDir: 'presentations',
+});
 ```
 
 - `presentationsDir`: directory to scan for presentations. Default: `presentations`
-- `defaultBuildCommand`: action used when `vite build` runs without an explicit forwarded subcommand
-- `devArgs`, `buildArgs`, `exportArgs`: default Slidev arguments appended before user-provided CLI arguments
+    - relative paths are resolved from the Vite root
 
-## Troubleshooting
+Other options exist for advanced or custom setups, but most users only need `presentationsDir`.
 
-### The selector does not appear
+## Directory layout notes
 
-- In a non-interactive shell, set `SLIDEV_MANAGER_PRESENTATION=<folder>`.
-- For browser export, use `npm run export:browser`, not `vite export`.
+This plugin does not require a VS Code workspace-specific layout.
+It works with a regular directory structure as long as:
 
-### `POST /__bridge/switch ... 404 Not Found`
+- Vite can start from the intended project root
+- `presentationsDir` points to your presentation folders, relative to the Vite root or as an absolute path
+- `@slidev/cli` is resolvable from the project where the plugin runs
 
-This usually means port `3030` is being served by a regular Vite / Slidev process instead of the manager bridge.
+This repository includes verified sample layouts under `fixture/`.
 
-```bash
-pkill -f "slidev.mjs"
-pkill -f "/slides/node_modules/.bin/vite"
-```
+- `fixture/normal`: regular directory layout without workspaces
+- `fixture/workspace`: monorepo-style layout with workspaces and shared themes
 
-Then restart from the Slidev monorepo root and verify:
-
-```bash
-curl http://localhost:3030/__bridge/presentations
-```
-
-If the bridge is active, that endpoint returns JSON.
-
-### `Unknown arguments: timeout, wait-until`
-
-Update to a version that strips export-only flags before launching the dev server for browser export.
+See `fixture/README.md` for setup and run instructions.
 
 ## Development
 

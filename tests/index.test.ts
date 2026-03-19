@@ -47,11 +47,13 @@ describe('selectPresentation', () => {
     });
 
     it('uses the preselected folder when provided', async () => {
+        const presentationsDir = await createPresentationsFixture(['minimal-demo', 'other-deck']);
+
         const result = await selectPresentation({
             action: 'build',
             heading: 'Select',
             helpText: 'Help',
-            presentationsDir: new URL('../../slides/presentations', import.meta.url).pathname,
+            presentationsDir,
             preselectedFolder: 'minimal-demo',
         });
 

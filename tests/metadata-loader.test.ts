@@ -146,6 +146,39 @@ describe('loadPresentationMetadata', () => {
             },
         ]);
     });
+
+    it('computes relative slides paths from the provided root', async () => {
+        const projectRoot = '/repo/app';
+        const customDir = path.join(projectRoot, 'slidesets');
+
+        vi.mocked(fs.readdir).mockResolvedValue([createDirent('custom-pres')] as unknown as Awaited<
+            ReturnType<typeof fs.readdir>
+        >);
+
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+            if (normalizePath(filePath).endsWith('custom-pres/slides.md')) {
+                return '# Custom Presentation';
+            }
+
+            throw createNodeError('ENOENT');
+        });
+
+        vi.mocked(fs.access).mockImplementation(async (filePath) => {
+            if (normalizePath(filePath).endsWith('custom-pres/slides.md')) {
+                return undefined;
+            }
+
+            throw createNodeError('ENOENT');
+        });
+
+        const metadata = await loadPresentationMetadata(projectRoot, customDir);
+
+        expect(metadata).toHaveLength(1);
+        expect(metadata[0]?.folder).toBe('custom-pres');
+        expect(metadata[0]?.relativeSlidesPath?.replaceAll('\\', '/')).toBe(
+            'slidesets/custom-pres/slides.md',
+        );
+    });
 });
 
 function createDirent(name: string): Dirent {
