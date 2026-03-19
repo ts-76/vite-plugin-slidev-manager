@@ -1,9 +1,8 @@
-import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 import { createLaunchContext, startDevServerBridge } from './dev-server-bridge.js';
 import { rootDir } from './metadata-loader.js';
+import { runPresentationAction } from './presentation-runner.js';
 import type { PresentationAction, PresentationOption } from './presentation-selector.js';
 
 const slidevCommands = ['dev', 'build', 'export'] as const;
@@ -60,6 +59,8 @@ async function runDevSelector(
             presentationsDir,
         });
 
+        restoreTerminalInput();
+
         if (options.length === 0) {
             console.error(
                 `No Slidev presentations with a ${invocation.action} entrypoint were found.`,
@@ -86,7 +87,7 @@ async function runDevSelector(
             process.exit(0);
         });
 
-        await new Promise<void>(() => {});
+        process.exit(await bridge.waitUntilStopped());
     } catch (error: unknown) {
         console.error('Failed to run presentation selector:', getErrorMessage(error));
         process.exit(1);
@@ -109,6 +110,8 @@ async function runBuildSelector(
                 : undefined,
         });
 
+        restoreTerminalInput();
+
         if (options.length === 0) {
             console.error(
                 `No Slidev presentations with a ${invocation.action} entrypoint were found.`,
@@ -127,38 +130,11 @@ async function runBuildSelector(
 }
 
 async function runCommand(selection: PresentationOption, invocation: SlidevInvocation) {
-    const require = createRequire(import.meta.url);
-    const slidevPath = require.resolve('@slidev/cli/bin/slidev.mjs');
-    const absoluteSlidesPath = selection.slidesPath;
-
-    if (!absoluteSlidesPath) {
-        console.error('Could not determine slides path for selection');
-        return 1;
+    if (invocation.action === 'dev') {
+        throw new Error('runCommand does not support dev invocations');
     }
 
-    const cwd = path.dirname(absoluteSlidesPath);
-    const slidesArg = path.basename(absoluteSlidesPath);
-    const commandArgs = [slidevPath, invocation.action, slidesArg, ...invocation.args];
-
-    return new Promise<number>((resolve) => {
-        const child = spawn('node', commandArgs, {
-            cwd,
-            stdio: 'inherit',
-            env: {
-                ...process.env,
-                NODE_ENV: invocation.action === 'dev' ? 'development' : 'production',
-            },
-        });
-
-        child.on('exit', (code) => {
-            resolve(code ?? 0);
-        });
-
-        child.on('error', (error) => {
-            console.error(`Failed to start ${invocation.action}:`, error.message);
-            resolve(1);
-        });
-    });
+    return runPresentationAction(selection, invocation.action, invocation.args);
 }
 
 export function resolveInvocation(
@@ -193,15 +169,7 @@ function mergeDefaultArgs(
 ): string[] {
     const configuredArgs = getConfiguredArgs(action, options);
     const defaults = getDefaultArgs(action);
-    const mergedArgs = [...configuredArgs, ...defaults];
-
-    for (const arg of userArgs) {
-        if (!mergedArgs.includes(arg)) {
-            mergedArgs.push(arg);
-        }
-    }
-
-    return mergedArgs;
+    return [...configuredArgs, ...defaults, ...userArgs];
 }
 
 function getConfiguredArgs(
@@ -253,6 +221,22 @@ function getHelpText(action: PresentationAction): string {
     }
 
     return 'Use arrow keys to pick a presentation, press Enter to export, or Q to cancel.';
+}
+
+function restoreTerminalInput(): void {
+    if (!process.stdin.isTTY) {
+        return;
+    }
+
+    process.stdin.removeAllListeners('data');
+    process.stdin.removeAllListeners('keypress');
+    process.stdin.removeAllListeners('readable');
+
+    if (typeof process.stdin.setRawMode === 'function') {
+        process.stdin.setRawMode(false);
+    }
+
+    process.stdin.pause();
 }
 
 function isPresentationAction(value: string | undefined): value is PresentationAction {

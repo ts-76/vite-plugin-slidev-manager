@@ -16,6 +16,7 @@ interface PresentationPackageJson {
 
 export interface PresentationMetadata {
     folder: string;
+    presentationDir: string;
     workspace: string | null;
     scripts: Partial<Record<PresentationAction, string>>;
     availableActions: PresentationAction[];
@@ -80,6 +81,7 @@ async function inspectPresentation(
 
     return {
         folder,
+        presentationDir,
         workspace: packageJson?.name ?? null,
         scripts,
         availableActions,

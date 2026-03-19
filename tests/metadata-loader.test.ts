@@ -2,13 +2,17 @@ import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadPresentationMetadata } from './metadata-loader.js';
+import { loadPresentationMetadata } from '../src/metadata-loader.js';
 
 vi.mock('node:fs/promises');
 
 describe('loadPresentationMetadata', () => {
     const mockCwd = '/mock/cwd';
     const presentationsDir = path.join(mockCwd, 'presentations');
+
+    function normalizePath(filePath: unknown): string {
+        return String(filePath).replace(/\\/g, '/');
+    }
 
     beforeEach(() => {
         vi.spyOn(process, 'cwd').mockReturnValue(mockCwd);
@@ -34,7 +38,7 @@ describe('loadPresentationMetadata', () => {
         ] as unknown as Awaited<ReturnType<typeof fs.readdir>>);
 
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
-            const normalizedPath = String(filePath);
+            const normalizedPath = normalizePath(filePath);
 
             if (normalizedPath.endsWith('pres1/package.json')) {
                 return JSON.stringify({
@@ -55,7 +59,7 @@ describe('loadPresentationMetadata', () => {
         });
 
         vi.mocked(fs.access).mockImplementation(async (filePath) => {
-            const normalizedPath = String(filePath);
+            const normalizedPath = normalizePath(filePath);
 
             if (normalizedPath.endsWith('pres2/slides.md')) {
                 return undefined;
@@ -69,6 +73,7 @@ describe('loadPresentationMetadata', () => {
         expect(metadata).toEqual([
             {
                 folder: 'pres1',
+                presentationDir: path.join(presentationsDir, 'pres1'),
                 workspace: 'pres1-workspace',
                 scripts: {
                     dev: 'slidev dev',
@@ -81,11 +86,15 @@ describe('loadPresentationMetadata', () => {
             },
             {
                 folder: 'pres2',
+                presentationDir: path.join(presentationsDir, 'pres2'),
                 workspace: null,
                 scripts: {},
                 availableActions: ['dev', 'build', 'export'],
                 slidesPath: path.join(presentationsDir, 'pres2/slides.md'),
-                relativeSlidesPath: 'presentations/pres2/slides.md',
+                relativeSlidesPath: path.relative(
+                    mockCwd,
+                    path.join(presentationsDir, 'pres2/slides.md'),
+                ),
                 title: 'Presentation 2',
             },
         ]);
@@ -105,7 +114,7 @@ describe('loadPresentationMetadata', () => {
         });
 
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
-            if (String(filePath).endsWith('custom-pres/package.json')) {
+            if (normalizePath(filePath).endsWith('custom-pres/package.json')) {
                 return JSON.stringify({
                     name: 'custom-workspace',
                     title: 'Custom Presentation',
@@ -125,6 +134,7 @@ describe('loadPresentationMetadata', () => {
         expect(metadata).toEqual([
             {
                 folder: 'custom-pres',
+                presentationDir: path.join(customDir, 'custom-pres'),
                 workspace: 'custom-workspace',
                 scripts: {
                     export: 'slidev export',

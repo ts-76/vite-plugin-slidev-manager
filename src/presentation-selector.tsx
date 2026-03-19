@@ -27,6 +27,7 @@ export interface SelectPresentationResult {
 
 export interface PresentationOption {
     folder: string;
+    presentationDir: string;
     workspace: string | null;
     title: string | null;
     run: {
@@ -95,6 +96,7 @@ interface SelectorProps {
 }
 
 function Selector({ options, heading, helpText, action, onSelect, onCancel }: SelectorProps) {
+    void action;
     useInput((input, key) => {
         if (input === 'q' || key.escape) {
             onCancel();
@@ -108,7 +110,7 @@ function Selector({ options, heading, helpText, action, onSelect, onCancel }: Se
                 value: option,
                 key: createPresentationKey(option),
             })),
-        [options, action],
+        [options],
     );
 
     return React.createElement(
@@ -135,9 +137,27 @@ function createOptionFromMetadata(
         return null;
     }
 
+    if (action === 'dev' && meta.slidesPath) {
+        return {
+            folder: meta.folder,
+            presentationDir: meta.presentationDir,
+            workspace: meta.workspace,
+            title: meta.title,
+            run: {
+                type: 'slides',
+                slidesPath: meta.slidesPath,
+                relativeSlidesPath: meta.relativeSlidesPath ?? undefined,
+                action,
+            },
+            slidesPath: meta.slidesPath,
+            relativeSlidesPath: meta.relativeSlidesPath,
+        };
+    }
+
     if (meta.workspace && meta.scripts[action]) {
         return {
             folder: meta.folder,
+            presentationDir: meta.presentationDir,
             workspace: meta.workspace,
             title: meta.title,
             run: {
@@ -153,6 +173,7 @@ function createOptionFromMetadata(
     if (meta.slidesPath) {
         return {
             folder: meta.folder,
+            presentationDir: meta.presentationDir,
             workspace: meta.workspace,
             title: meta.title,
             run: {

@@ -1,7 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
-import { spawn } from 'node:child_process';
 import http from 'node:http';
-import { createRequire } from 'node:module';
+import type { Duplex } from 'node:stream';
 import path from 'node:path';
 import { cleanDevSwitcherFiles, generateDevSwitcherFiles } from './dev-switcher.js';
 import type { DeckEntry } from './generated-switcher-template.js';
@@ -10,7 +9,22 @@ import {
     type PresentationLabelInput,
     toSlug,
 } from './presentation-helpers.js';
+import {
+    createDevSpawnSpec,
+    openBrowser,
+    reservePort,
+    resolveBasePath,
+    resolvePort,
+    shouldOpenBrowser,
+    spawnWithSpec,
+    waitForHttpReady,
+} from './presentation-runner.js';
 import type { PresentationOption } from './presentation-selector.js';
+
+const PUBLIC_HOST = 'localhost';
+const LOG_PREFIX = '[slidev-manager]';
+const ANSI_CYAN = '\u001B[36m';
+const ANSI_RESET = '\u001B[0m';
 
 export interface LaunchContext {
     selected: PresentationOption;
@@ -22,6 +36,20 @@ export interface DevServerBridge {
     readonly bridgePort: number;
     readonly currentFolder: string;
     stop(): Promise<void>;
+    waitUntilStopped(): Promise<number>;
+}
+
+export interface DevServerBridgeRuntime {
+    reservePort?: () => Promise<number>;
+    waitForReady?: (url: string) => Promise<void>;
+    openBrowser?: (url: string) => Promise<void>;
+}
+
+interface DevSession {
+    selection: PresentationOption;
+    process: ChildProcess;
+    upstreamPort: number;
+    preparedDeckRoot: string | null;
 }
 
 export function createLaunchContext(
@@ -32,76 +60,30 @@ export function createLaunchContext(
     return { selected, presentations, args };
 }
 
-export async function startDevServerBridge(context: LaunchContext): Promise<DevServerBridge> {
-    let slidevProcess: ChildProcess | null = null;
-    let currentSelection = context.selected;
-    let preparedDeckRoot: string | null = null;
-
-    const require = createRequire(import.meta.url);
-    const slidevPath = require.resolve('@slidev/cli/bin/slidev.mjs');
+export async function startDevServerBridge(
+    context: LaunchContext,
+    runtime: DevServerBridgeRuntime = {},
+): Promise<DevServerBridge> {
     const deckEntries = toDeckEntries(context.presentations);
+    const basePath = resolveBasePath(context.args);
+    const shouldOpen = shouldOpenBrowser(context.args);
+    const reservePortImpl = runtime.reservePort ?? reservePort;
+    const waitForReadyImpl = runtime.waitForReady ?? waitForHttpReady;
+    const openBrowserImpl = runtime.openBrowser ?? openBrowser;
 
-    async function launchSlidev(): Promise<void> {
-        const absoluteSlidesPath = currentSelection.slidesPath;
-        if (!absoluteSlidesPath) {
-            throw new Error(`Could not determine slides path for "${currentSelection.folder}"`);
-        }
-
-        const cwd = path.dirname(absoluteSlidesPath);
-        preparedDeckRoot = cwd;
-        await generateDevSwitcherFiles({
-            deckRoot: cwd,
-            decks: deckEntries,
-            currentSlug: toSlug(currentSelection.folder, currentSelection.workspace),
-            bridgeUrl: `http://127.0.0.1:${resolvedPort}/__bridge/switch`,
-        });
-        const slidesArg = path.basename(absoluteSlidesPath);
-        const commandArgs = [slidevPath, slidesArg, ...context.args];
-
-        console.log(`[bridge] Launching Slidev dev for "${currentSelection.folder}"...`);
-
-        slidevProcess = spawn('node', commandArgs, {
-            cwd,
-            stdio: 'inherit',
-            env: {
-                ...process.env,
-                NODE_ENV: 'development',
-            },
-        });
-
-        slidevProcess.on('error', (error) => {
-            console.error(`[bridge] Failed to start Slidev dev:`, error.message);
-        });
-
-        slidevProcess.on('exit', (code, signal) => {
-            if (signal !== 'SIGTERM') {
-                console.log(`[bridge] Slidev dev exited with code ${code ?? 0}`);
-            }
-            slidevProcess = null;
-        });
-    }
-
-    function killSlidev(): Promise<void> {
-        return new Promise((resolve) => {
-            if (!slidevProcess) {
-                resolve();
-                return;
-            }
-
-            const child = slidevProcess;
-            slidevProcess = null;
-
-            child.on('exit', () => {
-                resolve();
-            });
-
-            child.kill('SIGTERM');
-        });
-    }
+    let publicPort = resolvePort(context.args);
+    let currentSelection = context.selected;
+    let currentSession: DevSession | null = null;
+    let stopPromise: Promise<void> | null = null;
+    let stopped = false;
+    let stopExitCode = 0;
+    let resolveStopped: ((code: number) => void) | null = null;
+    const stoppedPromise = new Promise<number>((resolve) => {
+        resolveStopped = resolve;
+    });
 
     const server = http.createServer(async (req, res) => {
-        const url = new URL(req.url ?? '/', `http://localhost`);
-        const targetUrl = resolveSlidevUrl(req, context.args);
+        const url = new URL(req.url ?? '/', publicUrl(publicPort, '/'));
 
         if (url.pathname === '/__bridge/presentations' && req.method === 'GET') {
             const body = JSON.stringify({
@@ -121,12 +103,16 @@ export async function startDevServerBridge(context: LaunchContext): Promise<DevS
                 return;
             }
 
-            const target = context.presentations.find((p) => p.folder === folder);
+            const target = context.presentations.find(
+                (presentation) => presentation.folder === folder,
+            );
             if (!target) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: `Presentation "${folder}" not found` }));
                 return;
             }
+
+            const targetUrl = publicUrl(publicPort, basePath);
 
             if (target.folder === currentSelection.folder) {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -134,62 +120,163 @@ export async function startDevServerBridge(context: LaunchContext): Promise<DevS
                 return;
             }
 
-            console.log(`[bridge] Switching from "${currentSelection.folder}" to "${folder}"...`);
+            console.log(
+                formatManagerLog(
+                    `Switching from "${currentSelection.folder}" to "${folder}"...`,
+                ),
+            );
 
-            await killSlidev();
-            if (preparedDeckRoot) {
-                await cleanDevSwitcherFiles(preparedDeckRoot);
-                preparedDeckRoot = null;
+            try {
+                const nextSession = await createSession(target);
+                const previousSession = currentSession;
+                currentSession = nextSession;
+                currentSelection = target;
+
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(renderRedirectPage(targetUrl, `Switched to "${folder}".`), () => {
+                    if (previousSession) {
+                        void stopSession(previousSession);
+                    }
+                });
+            } catch (error: unknown) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: getErrorMessage(error) }));
             }
-            currentSelection = target;
-            await launchSlidev();
 
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(renderRedirectPage(targetUrl, `Switching to "${folder}"...`));
             return;
         }
 
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not found' }));
+        await proxyHttpRequest(req, res, currentSession?.upstreamPort ?? null);
     });
 
-    let resolvedPort = 0;
+    server.on('upgrade', (req, socket, head) => {
+        socket.on('error', () => {
+            // Browser HMR sockets can reset while decks switch.
+        });
+        void proxyWebSocketUpgrade(req, socket, head, currentSession?.upstreamPort ?? null);
+    });
+
+    server.on('clientError', (_error, socket) => {
+        socket.destroy();
+    });
 
     await new Promise<void>((resolve, reject) => {
-        server.listen(0, '127.0.0.1', () => {
-            const addr = server.address();
-            if (addr && typeof addr === 'object') {
-                resolvedPort = addr.port;
+        server.listen(publicPort, () => {
+            const address = server.address();
+            if (address && typeof address === 'object') {
+                publicPort = address.port;
             }
             resolve();
         });
+
         server.on('error', reject);
     });
 
-    await launchSlidev();
+    currentSession = await createSession(currentSelection);
 
-    console.log(`[bridge] Bridge server listening on http://127.0.0.1:${resolvedPort}`);
+    console.log(formatManagerLog(`Ready at ${formatUrlForLog(publicUrl(publicPort, basePath))}`));
+
+    if (shouldOpen) {
+        try {
+            await openBrowserImpl(publicUrl(publicPort, basePath));
+        } catch (error: unknown) {
+            console.warn(`${LOG_PREFIX} Failed to open browser: ${getErrorMessage(error)}`);
+        }
+    }
 
     return {
         get bridgePort() {
-            return resolvedPort;
+            return publicPort;
         },
         get currentFolder() {
             return currentSelection.folder;
         },
         async stop() {
-            await killSlidev();
+            await stopBridge();
+        },
+        waitUntilStopped() {
+            return stoppedPromise;
+        },
+    };
+
+    async function createSession(selection: PresentationOption): Promise<DevSession> {
+        const upstreamPort = await reservePortImpl();
+        const preparedDeckRoot = resolveDeckRoot(selection);
+
+        try {
+            if (preparedDeckRoot) {
+                await generateDevSwitcherFiles({
+                    deckRoot: preparedDeckRoot,
+                    decks: deckEntries,
+                    currentSlug: toSlug(selection.folder, selection.workspace),
+                    bridgeUrl: publicUrl(publicPort, '/__bridge/switch'),
+                });
+            }
+
+            const spec = await createDevSpawnSpec(selection, context.args, upstreamPort);
+
+            console.log(formatManagerLog(`Launching Slidev dev for "${selection.folder}"...`));
+
+            const process = spawnWithSpec(spec);
+            process.on('error', (error) => {
+                console.error(`${LOG_PREFIX} Failed to start dev process:`, error.message);
+            });
+            process.on('exit', (code, signal) => {
+                if (signal !== 'SIGTERM') {
+                    console.log(`${LOG_PREFIX} Slidev dev exited with code ${code ?? 0}`);
+                }
+
+                if (currentSession?.process === process) {
+                    currentSession = null;
+                    void stopBridge(code ?? 0);
+                }
+            });
+
+            await waitForReadyImpl(publicUrl(upstreamPort, basePath));
+
+            return {
+                selection,
+                process,
+                upstreamPort,
+                preparedDeckRoot,
+            };
+        } catch (error: unknown) {
             if (preparedDeckRoot) {
                 await cleanDevSwitcherFiles(preparedDeckRoot);
-                preparedDeckRoot = null;
             }
+
+            throw error;
+        }
+    }
+
+    async function stopBridge(exitCode: number = 0): Promise<void> {
+        if (stopPromise) {
+            return stopPromise;
+        }
+
+        stopPromise = (async () => {
+            const session = currentSession;
+            currentSession = null;
+
+            if (session) {
+                await stopSession(session);
+            }
+
             await new Promise<void>((resolve) => {
                 server.close(() => {
                     resolve();
                 });
             });
-        },
-    };
+
+            if (!stopped) {
+                stopped = true;
+                stopExitCode = exitCode;
+                resolveStopped?.(stopExitCode);
+            }
+        })();
+
+        return stopPromise;
+    }
 }
 
 function toDeckEntries(presentations: PresentationOption[]): DeckEntry[] {
@@ -232,77 +319,255 @@ function toDeckEntries(presentations: PresentationOption[]): DeckEntry[] {
         });
 }
 
-function resolveSlidevUrl(req: http.IncomingMessage, args: string[]): string {
-    const referer = req.headers.referer;
+async function stopSession(session: DevSession): Promise<void> {
+    await killChildProcess(session.process);
 
-    if (referer) {
-        try {
-            const refererUrl = new URL(referer);
-            return new URL(resolveBasePath(args), refererUrl.origin).toString();
-        } catch {
-            return `http://127.0.0.1:${resolvePort(args)}${resolveBasePath(args)}`;
-        }
+    if (session.preparedDeckRoot) {
+        await cleanDevSwitcherFiles(session.preparedDeckRoot);
     }
-
-    return `http://127.0.0.1:${resolvePort(args)}${resolveBasePath(args)}`;
 }
 
-function resolvePort(args: string[]): string {
-    for (let index = 0; index < args.length; index += 1) {
-        const arg = args[index];
+function killChildProcess(child: ChildProcess): Promise<void> {
+    return new Promise((resolve) => {
+        let settled = false;
 
-        if (!arg) {
-            continue;
+        const finish = () => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            resolve();
+        };
+
+        child.once('exit', finish);
+        child.once('error', finish);
+
+        if (child.exitCode !== null || child.killed) {
+            finish();
+            return;
         }
 
-        if (arg === '--port' || arg === '-p') {
-            return args[index + 1] ?? '3030';
-        }
-
-        if (arg.startsWith('--port=')) {
-            return arg.slice('--port='.length) || '3030';
-        }
-
-        if (arg.startsWith('-p') && arg.length > 2) {
-            return arg.slice(2) || '3030';
-        }
-    }
-
-    return '3030';
+        child.kill('SIGTERM');
+    });
 }
 
-function resolveBasePath(args: string[]): string {
-    for (let index = 0; index < args.length; index += 1) {
-        const arg = args[index];
-
-        if (!arg) {
-            continue;
-        }
-
-        if (arg === '--base') {
-            return normalizeBasePath(args[index + 1] ?? '/');
-        }
-
-        if (arg.startsWith('--base=')) {
-            return normalizeBasePath(arg.slice('--base='.length) || '/');
-        }
+async function proxyHttpRequest(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    upstreamPort: number | null,
+): Promise<void> {
+    if (!upstreamPort) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No active Slidev dev server' }));
+        return;
     }
 
-    return '/';
+    const body = await readRequestBody(req);
+
+    await proxyHttpRequestWithHosts(req, res, upstreamPort, body, ['127.0.0.1', 'localhost']);
 }
 
-function normalizeBasePath(basePath: string): string {
-    if (!basePath.startsWith('/')) {
-        return `/${basePath}`;
+async function proxyWebSocketUpgrade(
+    req: http.IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    upstreamPort: number | null,
+): Promise<void> {
+    if (!upstreamPort) {
+        socket.destroy();
+        return;
     }
 
-    return basePath;
+    await proxyWebSocketUpgradeWithHosts(
+        req,
+        socket,
+        head,
+        upstreamPort,
+        ['127.0.0.1', 'localhost'],
+    );
+}
+
+async function readRequestBody(req: http.IncomingMessage): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+
+    for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+
+    return Buffer.concat(chunks);
+}
+
+async function proxyHttpRequestWithHosts(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    upstreamPort: number,
+    body: Buffer,
+    hosts: string[],
+): Promise<void> {
+    const [host, ...restHosts] = hosts;
+
+    await new Promise<void>((resolve) => {
+        const proxyReq = http.request(
+            {
+                hostname: host,
+                port: upstreamPort,
+                method: req.method,
+                path: req.url,
+                headers: req.headers,
+            },
+            (proxyRes) => {
+                res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+                proxyRes.pipe(res);
+                proxyRes.on('end', resolve);
+            },
+        );
+
+        proxyReq.on('error', async (error) => {
+            if (restHosts.length > 0) {
+                resolve(await proxyHttpRequestWithHosts(req, res, upstreamPort, body, restHosts));
+                return;
+            }
+
+            if (!res.headersSent) {
+                res.writeHead(502, { 'Content-Type': 'application/json' });
+            }
+            res.end(JSON.stringify({ error: getErrorMessage(error) }));
+            resolve();
+        });
+
+        if (body.length > 0) {
+            proxyReq.write(body);
+        }
+
+        proxyReq.end();
+    });
+}
+
+async function proxyWebSocketUpgradeWithHosts(
+    req: http.IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    upstreamPort: number,
+    hosts: string[],
+): Promise<void> {
+    const [host, ...restHosts] = hosts;
+
+    await new Promise<void>((resolve) => {
+        const proxyReq = http.request({
+            hostname: host,
+            port: upstreamPort,
+            method: req.method,
+            path: req.url,
+            headers: req.headers,
+        });
+
+        consumeSocketErrors(socket);
+
+        proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+            consumeSocketErrors(proxySocket);
+
+            socket.write(serializeUpgradeResponse(proxyRes));
+
+            if (proxyHead.length > 0) {
+                socket.write(proxyHead);
+            }
+
+            if (head.length > 0) {
+                proxySocket.write(head);
+            }
+
+            socket.on('close', () => {
+                safeDestroy(proxySocket);
+            });
+            proxySocket.on('close', () => {
+                safeDestroy(socket);
+            });
+            proxySocket.pipe(socket);
+            socket.pipe(proxySocket);
+            resolve();
+        });
+
+        proxyReq.on('response', (proxyRes) => {
+            proxyRes.resume();
+            safeDestroy(socket);
+            resolve();
+        });
+
+        proxyReq.on('error', async () => {
+            if (restHosts.length > 0) {
+                resolve(
+                    await proxyWebSocketUpgradeWithHosts(
+                        req,
+                        socket,
+                        head,
+                        upstreamPort,
+                        restHosts,
+                    ),
+                );
+                return;
+            }
+
+            socket.destroy();
+            resolve();
+        });
+
+        proxyReq.end();
+    });
+}
+
+function consumeSocketErrors(socket: Duplex): void {
+    socket.on('error', () => {
+        // Socket resets are expected when the browser reconnects during deck switches.
+    });
+}
+
+function safeDestroy(socket: Duplex): void {
+    if (socket.destroyed) {
+        return;
+    }
+
+    socket.destroy();
+}
+
+function serializeUpgradeResponse(response: http.IncomingMessage): string {
+    const statusLine = `HTTP/1.1 ${response.statusCode ?? 101} ${response.statusMessage ?? 'Switching Protocols'}\r\n`;
+    const headers = Object.entries(response.headers)
+        .flatMap(([name, value]) => {
+            if (value === undefined) {
+                return [];
+            }
+
+            if (Array.isArray(value)) {
+                return value.map((item) => `${name}: ${item}\r\n`);
+            }
+
+            return `${name}: ${value}\r\n`;
+        })
+        .join('');
+
+    return `${statusLine}${headers}\r\n`;
+}
+
+function resolveDeckRoot(selection: PresentationOption): string | null {
+    const slidesPath = selection.run.slidesPath ?? selection.slidesPath;
+    return slidesPath ? path.dirname(slidesPath) : null;
+}
+
+function publicUrl(port: number, pathname: string): string {
+    return new URL(pathname, `http://${PUBLIC_HOST}:${port}`).toString();
+}
+
+function formatUrlForLog(url: string): string {
+    return `${ANSI_CYAN}${url}${ANSI_RESET}`;
+}
+
+function formatManagerLog(message: string): string {
+    return `\n${LOG_PREFIX} ${message}\n`;
 }
 
 function renderRedirectPage(targetUrl: string, message: string): string {
     const escapedMessage = escapeHtml(message);
     const escapedTargetUrl = JSON.stringify(targetUrl);
-    const statusUrl = JSON.stringify(new URL(targetUrl).toString());
 
     return `<!doctype html>
 <html lang="en">
@@ -313,46 +578,15 @@ function renderRedirectPage(targetUrl: string, message: string): string {
   </head>
   <body>
     <p>${escapedMessage}</p>
-    <p><a href="${escapeHtml(targetUrl)}">Return to Slidev</a></p>
+    <p><a href="${escapeHtml(targetUrl)}">Open Slidev</a></p>
     <script>
       const targetUrl = ${escapedTargetUrl};
-      const probeUrl = ${statusUrl};
 
-      const navigate = () => {
-        if (window.top && window.top !== window) {
-          window.top.location.replace(targetUrl);
-          return;
-        }
-
+      if (window.top && window.top !== window) {
+        window.top.location.replace(targetUrl);
+      } else {
         window.location.replace(targetUrl);
-      };
-
-      const waitForServer = async () => {
-        const deadline = Date.now() + 20000;
-
-        while (Date.now() < deadline) {
-          try {
-            const response = await fetch(probeUrl, {
-              method: 'HEAD',
-              cache: 'no-store',
-              mode: 'no-cors',
-            });
-
-            if (response.type === 'opaque' || response.ok) {
-              navigate();
-              return;
-            }
-          } catch {
-            // Slidev dev server is still restarting.
-          }
-
-          await new Promise((resolve) => window.setTimeout(resolve, 250));
-        }
-
-        navigate();
-      };
-
-      void waitForServer();
+      }
     </script>
   </body>
 </html>`;
@@ -364,4 +598,21 @@ function escapeHtml(value: string): string {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    if (
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof error.message === 'string'
+    ) {
+        return error.message;
+    }
+
+    return String(error);
 }

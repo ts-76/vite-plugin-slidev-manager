@@ -7,8 +7,8 @@ import {
     generateDevSwitcherFiles,
     SUPPORT_DIR_NAME,
     type DevSwitcherManifest,
-} from './dev-switcher.js';
-import type { DeckEntry } from './generated-switcher-template.js';
+} from '../src/dev-switcher.js';
+import type { DeckEntry } from '../src/generated-switcher-template.js';
 
 const TEST_ROOT = path.join(import.meta.dirname, '..', '.test-tmp-dev-switcher');
 
@@ -98,24 +98,10 @@ describe('generateDevSwitcherFiles', () => {
         expect(content).toContain('<template>');
         expect(content).toContain('method="POST"');
         expect(content).toContain('formaction="http://localhost:3000/__bridge?folder=intro"');
-        expect(content).toContain('formaction="http://localhost:3000/__bridge?folder=advanced"');
+        expect(content).toContain(
+            'formaction="http://localhost:3000/__bridge?folder=advanced"',
+        );
         expect(content).toContain('smgr-item--active');
-    });
-
-    it('writes setup/context-menu.ts in the deck root', async () => {
-        const result = await generateDevSwitcherFiles({
-            deckRoot,
-            decks: DECKS,
-            currentSlug: 'intro',
-            bridgeUrl: 'http://localhost:3000/__bridge',
-            now: FIXED_DATE,
-        });
-
-        expect(result.contextMenuPath).toBe(path.join(deckRoot, 'setup', 'context-menu.ts'));
-
-        const content = await fs.readFile(result.contextMenuPath, 'utf8');
-        expect(content).toContain('export default (items) => items;');
-        expect(content).not.toContain('Switch Deck');
     });
 
     it('produces deterministic output for the same input', async () => {
@@ -130,16 +116,13 @@ describe('generateDevSwitcherFiles', () => {
         const result1 = await generateDevSwitcherFiles(opts);
         const manifest1 = await fs.readFile(result1.manifestPath, 'utf8');
         const navControls1 = await fs.readFile(result1.navControlsPath, 'utf8');
-        const contextMenu1 = await fs.readFile(result1.contextMenuPath, 'utf8');
 
         const result2 = await generateDevSwitcherFiles(opts);
         const manifest2 = await fs.readFile(result2.manifestPath, 'utf8');
         const navControls2 = await fs.readFile(result2.navControlsPath, 'utf8');
-        const contextMenu2 = await fs.readFile(result2.contextMenuPath, 'utf8');
 
         expect(manifest1).toBe(manifest2);
         expect(navControls1).toBe(navControls2);
-        expect(contextMenu1).toBe(contextMenu2);
     });
 
     it('returns the manifest object matching what was written', async () => {
@@ -173,25 +156,6 @@ describe('generateDevSwitcherFiles', () => {
 
         await expect(fs.readFile(result.navControlsBackupPath, 'utf8')).resolves.toBe(
             originalNavControls,
-        );
-    });
-
-    it('backs up an existing setup/context-menu.ts before overwriting it', async () => {
-        const setupDir = path.join(deckRoot, 'setup');
-        await fs.mkdir(setupDir, { recursive: true });
-        const originalContextMenu = 'export default {};\n';
-        await fs.writeFile(path.join(setupDir, 'context-menu.ts'), originalContextMenu, 'utf8');
-
-        const result = await generateDevSwitcherFiles({
-            deckRoot,
-            decks: DECKS,
-            currentSlug: 'intro',
-            bridgeUrl: 'http://localhost:3000/__bridge',
-            now: FIXED_DATE,
-        });
-
-        await expect(fs.readFile(result.contextMenuBackupPath, 'utf8')).resolves.toBe(
-            originalContextMenu,
         );
     });
 
@@ -248,37 +212,6 @@ describe('cleanDevSwitcherFiles', () => {
         const supportDir = buildSupportDirPath(deckRoot);
         await expect(fs.access(supportDir)).rejects.toThrow();
         await expect(fs.access(path.join(deckRoot, 'custom-nav-controls.vue'))).rejects.toThrow();
-        await expect(fs.access(path.join(deckRoot, 'setup', 'context-menu.ts'))).rejects.toThrow();
-    });
-
-    it('removes the setup directory if it becomes empty after cleanup', async () => {
-        await generateDevSwitcherFiles({
-            deckRoot,
-            decks: DECKS,
-            currentSlug: 'intro',
-            bridgeUrl: 'http://localhost:3000/__bridge',
-            now: FIXED_DATE,
-        });
-
-        await cleanDevSwitcherFiles(deckRoot);
-
-        await expect(fs.access(path.join(deckRoot, 'setup'))).rejects.toThrow();
-    });
-
-    it('preserves the setup directory if it contains other files', async () => {
-        await generateDevSwitcherFiles({
-            deckRoot,
-            decks: DECKS,
-            currentSlug: 'intro',
-            bridgeUrl: 'http://localhost:3000/__bridge',
-            now: FIXED_DATE,
-        });
-
-        await fs.writeFile(path.join(deckRoot, 'setup', 'main.ts'), 'export {};\n', 'utf8');
-        await cleanDevSwitcherFiles(deckRoot);
-
-        await expect(fs.access(path.join(deckRoot, 'setup'))).resolves.toBeUndefined();
-        await expect(fs.access(path.join(deckRoot, 'setup', 'main.ts'))).resolves.toBeUndefined();
     });
 
     it('does not throw when files do not exist', async () => {
@@ -306,27 +239,6 @@ describe('cleanDevSwitcherFiles', () => {
         await expect(
             fs.readFile(path.join(deckRoot, 'custom-nav-controls.vue'), 'utf8'),
         ).resolves.toBe(originalNavControls);
-    });
-
-    it('restores an original setup/context-menu.ts when one was backed up', async () => {
-        const setupDir = path.join(deckRoot, 'setup');
-        await fs.mkdir(setupDir, { recursive: true });
-        const originalContextMenu = 'export default {};\n';
-        await fs.writeFile(path.join(setupDir, 'context-menu.ts'), originalContextMenu, 'utf8');
-
-        await generateDevSwitcherFiles({
-            deckRoot,
-            decks: DECKS,
-            currentSlug: 'intro',
-            bridgeUrl: 'http://localhost:3000/__bridge',
-            now: FIXED_DATE,
-        });
-
-        await cleanDevSwitcherFiles(deckRoot);
-
-        await expect(fs.readFile(path.join(setupDir, 'context-menu.ts'), 'utf8')).resolves.toBe(
-            originalContextMenu,
-        );
     });
 
     it('removes legacy generated overlay files during cleanup', async () => {

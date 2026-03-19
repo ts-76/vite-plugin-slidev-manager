@@ -5,7 +5,7 @@ A Vite plugin for managing multiple Slidev presentations in a monorepo structure
 ## Features
 
 - **Interactive CLI**: Uses [Ink](https://github.com/vadimdemedes/ink) to provide a terminal selector.
-- **Slidev-aligned commands**: Launches `slidev dev`, `slidev build`, or `slidev export` for the selected presentation.
+- **Presentation-aware commands**: Launches either direct `slidev` commands or the selected presentation's `dev` / `build` / `export` workspace scripts.
 - **In-page dev switcher**: In dev mode, decks with a `slides.md` get an on-page switcher rendered through Slidev's global layer hook.
 - **Option passthrough**: Forward Slidev CLI flags such as `--port`, `--base`, or `--output` via `bun run ... -- ...`.
 - **Monorepo support**: Automatically discovers presentations in a `presentations` directory.
@@ -54,16 +54,16 @@ export default defineConfig({
 }
 ```
 
-`vite-plugin-slidev-manager` intercepts `vite` / `vite build`, shows the presentation selector, and then hands off execution to Slidev.
+`vite-plugin-slidev-manager` intercepts `vite` / `vite build`, shows the presentation selector, and then hands off execution to either Slidev directly or the selected presentation's workspace script.
 
 ### 3. Run commands
 
 - `bun run dev`
-    - Opens the selector, starts `slidev dev [entry] --open`, and injects an in-page deck switcher when the selected presentation has a `slides.md`
+    - Opens the selector, starts either the selected presentation's `dev` flow behind a stable local proxy URL, and injects an in-page deck switcher when the selected presentation has a `slides.md`
 - `bun run build`
-    - Opens the selector and starts `slidev build [entry]`
+    - Opens the selector and starts either `slidev build [entry]` or the selected presentation's `build` script
 - `bun run export`
-    - Opens the selector and starts `slidev export [entry] --timeout 60000 --wait-until domcontentloaded`
+    - Opens the selector and starts either `slidev export [entry] --timeout 60000 --wait-until domcontentloaded` or the selected presentation's `export` script
 
 ### 4. Pass Slidev options
 
@@ -92,20 +92,21 @@ CLI-passed arguments are appended after configured defaults so Slidev resolves t
 
 ### 5. Dev switcher behavior
 
-When you launch `bun run dev`, the plugin now runs Slidev behind a small local supervisor.
+When you launch `bun run dev`, the plugin runs the selected presentation behind a small local supervisor and a stable local proxy URL.
 
 - The terminal selector still chooses the initial deck.
 - If the selected presentation has a `slides.md`, the plugin generates a temporary `.slidev-manager/` support directory next to that deck.
-- It also writes temporary `custom-nav-controls.vue` and `setup/context-menu.ts` files so Slidev exposes deck switching in native-feeling UI surfaces.
-- Choosing another deck from the browser triggers a **full Slidev dev-server relaunch** for the new `slides.md`. This is not an in-app hot swap.
+- It also writes a temporary `custom-nav-controls.vue` file so Slidev can expose the deck-switching UI in nav controls.
+- The browser stays on a stable public URL while the supervisor swaps the upstream dev server behind the proxy.
+- Choosing another deck from the browser still triggers a **full dev-server relaunch** for the new deck. This is not an in-app hot swap.
 
 Notes and limitations:
 
-- Deck switching UI only appears for decks that can be launched directly from `slides.md`.
-- The primary browser UI is a compact switch button in Slidev's nav controls, plus right-click context-menu entries.
+- Deck switching UI only appears for decks that expose a `slides.md`, because the generated overlay files are injected into that deck root.
+- Workspace-script presentations without a `slides.md` can still be selected and launched, but they do not get the injected switcher UI.
 - If only one dev-capable deck with `slides.md` is available, the generated overlay stays hidden.
-- Existing `custom-nav-controls.vue` and `setup/context-menu.ts` content is backed up while the dev session is running and restored when the supervisor exits cleanly.
-- Forwarded Slidev flags such as `--port`, `--open`, and `--base` continue to apply after switching.
+- Existing `custom-nav-controls.vue` content is backed up while the dev session is running and restored when the supervisor exits cleanly.
+- Forwarded Slidev flags such as `--port`, `--open`, and `--base` continue to apply. During dev, the public `--port` belongs to the proxy and each upstream Slidev process receives an internal port.
 
 ## Directory structure
 
@@ -126,7 +127,7 @@ my-project/
         └── slides.md
 ```
 
-When `slides.md` exists, the presentation is available for all three Slidev commands. When only `package.json` exists, availability is inferred from the `dev` / `build` / `export` scripts present in that package.
+When `slides.md` exists, the presentation is available for all three direct Slidev commands. When only `package.json` exists, availability is inferred from the `dev` / `build` / `export` scripts present in that package, and those scripts are executed with the presentation directory as the working directory.
 
 ## Development
 
