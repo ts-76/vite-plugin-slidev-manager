@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.2
+
+[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.1.1...v0.1.2)
+
+### 📦 Build
+
+- Switch package build from `tsc` to `tsdown`.
+
+### 🏡 Chore
+
+- Update release workflow to use npm trusted publishing.
+- Update release workflow to create tags without pushing release commits to `main`.
+
 ## v0.1.1
 
 [compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.1.0...v0.1.1)
