@@ -47,9 +47,23 @@ jobs:
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            - run: bun install --frozen-lockfile
-            - name: Create release commit and tag
-              run: bun run release -- --push
+            - name: Read package version
+              id: package
+              run: |
+                  echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+            - name: Skip if release tag already exists
+              id: tag
+              run: |
+                  if git rev-parse "v${{ steps.package.outputs.version }}" >/dev/null 2>&1; then
+                      echo "exists=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "exists=false" >> "$GITHUB_OUTPUT"
+                  fi
+            - name: Create and push release tag
+              if: steps.tag.outputs.exists != 'true'
+              run: |
+                  git tag -a "v${{ steps.package.outputs.version }}" -m "v${{ steps.package.outputs.version }}"
+                  git push origin "v${{ steps.package.outputs.version }}"
 
     publish:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
