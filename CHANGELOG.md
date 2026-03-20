@@ -2,7 +2,7 @@
 
 ## v0.1.1
 
-[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.6...v0.1.1)
+[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.1.0...v0.1.1)
 
 ## v0.1.0
 
