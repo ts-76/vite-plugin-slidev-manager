@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.1
+
+[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.1.0...v0.1.1)
+
 ## v0.1.0
 
 [compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.7...v0.1.0)
@@ -17,8 +21,13 @@
 
 [compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.6...v0.0.7)
 
+### 📖 Documentation
+
+- Update changelog with v0.0.6 and changelogen introduction for v0.0.7. ([6aba68f](https://github.com/ts-76/vite-plugin-slidev-manager/commit/6aba68f))
+
 ### 🏡 Chore
 
+- **release:** V0.0.7 ([eb73e07](https://github.com/ts-76/vite-plugin-slidev-manager/commit/eb73e07))
 - Introduce changelogen for release management ([eb73e07](https://github.com/ts-76/vite-plugin-slidev-manager/commit/eb73e07))
 
 ## v0.0.6
