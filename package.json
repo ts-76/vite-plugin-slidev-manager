@@ -19,13 +19,13 @@
         "dist"
     ],
     "type": "module",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
+    "main": "dist/index.mjs",
+    "types": "dist/index.d.mts",
     "exports": {
-        ".": "./dist/index.js"
+        ".": "./dist/index.mjs"
     },
     "scripts": {
-        "build": "tsc",
+        "build": "tsdown",
         "test": "vitest run",
         "lint": "oxlint src --deny-warnings",
         "lint:fix": "oxlint src --fix",
@@ -46,6 +46,7 @@
         "changelogen": "^0.6.2",
         "oxfmt": "^0.41.0",
         "oxlint": "^1.56.0",
+        "tsdown": "^0.21.4",
         "typescript": "^5.9.3",
         "vite": "^8.0.0",
         "vitest": "^4.1.0"
