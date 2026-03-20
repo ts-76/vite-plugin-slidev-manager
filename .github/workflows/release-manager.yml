@@ -4,6 +4,8 @@ on:
     push:
         branches:
             - main
+        tags:
+            - 'v*'
     pull_request:
         branches:
             - main
@@ -14,7 +16,7 @@ concurrency:
 
 jobs:
     check:
-        if: github.event_name == 'pull_request' || github.actor != 'github-actions[bot]'
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor != 'github-actions[bot]')
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -34,7 +36,6 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             contents: write
-            id-token: write
         steps:
             - uses: actions/checkout@v4
               with:
@@ -49,15 +50,47 @@ jobs:
             - run: bun install --frozen-lockfile
             - name: Create release commit and tag
               run: bun run release -- --push
-            - name: Create GitHub release from changelog
-              run: bunx changelogen gh release --token "$GITHUB_TOKEN"
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
+
+    publish:
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: '1.3.10'
             - uses: actions/setup-node@v4
               with:
-                  node-version: '20'
+                  node-version: '22.14.0'
                   registry-url: 'https://registry.npmjs.org'
-            - run: bun run build
-            - run: npm publish --access public
+            - name: Verify tag matches package version
+              run: |
+                  test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+            - name: Read package metadata
+              id: package
+              run: |
+                  echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+                  echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+            - run: bun install --frozen-lockfile
+            - name: Create GitHub release from changelog
+              run: |
+                  gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || bunx changelogen gh release --token "$GITHUB_TOKEN"
               env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+                  GITHUB_TOKEN: ${{ github.token }}
+            - run: bun run build
+            - name: Check npm package version
+              id: npm
+              run: |
+                  if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+                      echo "published=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "published=false" >> "$GITHUB_OUTPUT"
+                  fi
+            - name: Publish to npm with trusted publishing
+              run: npm publish --access public
+              if: steps.npm.outputs.published != 'true'
