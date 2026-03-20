@@ -3,6 +3,9 @@
 ## v0.1.1
 
 [compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.6...v0.1.1)
+## v0.1.0
+
+[compare changes](https://github.com/ts-76/vite-plugin-slidev-manager/compare/v0.0.7...v0.1.0)
 
 ### 🚀 Enhancements
 
@@ -20,11 +23,6 @@
 ### 🏡 Chore
 
 - **release:** V0.0.7 ([eb73e07](https://github.com/ts-76/vite-plugin-slidev-manager/commit/eb73e07))
-
-### ❤️ Contributors
-
-- Ts-76 <ts.createlink@gmail.com>
-- Tsukuruhito <ts.createlink@gmail.com>
 
 ## v0.0.7
 
