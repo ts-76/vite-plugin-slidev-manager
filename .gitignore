@@ -3,9 +3,12 @@ node_modules
 .env
 .vscode
 .idea
-.agent
 coverage
 build
 out
 dist
 *.log
+
+.agent
+.agents
+skills-lock.json
