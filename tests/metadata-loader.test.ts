@@ -83,6 +83,8 @@ describe('loadPresentationMetadata', () => {
                 slidesPath: null,
                 relativeSlidesPath: null,
                 title: 'Presentation 1',
+                date: null,
+                author: null,
             },
             {
                 folder: 'pres2',
@@ -96,6 +98,8 @@ describe('loadPresentationMetadata', () => {
                     path.join(presentationsDir, 'pres2/slides.md'),
                 ),
                 title: 'Presentation 2',
+                date: null,
+                author: null,
             },
         ]);
     });
@@ -143,6 +147,8 @@ describe('loadPresentationMetadata', () => {
                 slidesPath: null,
                 relativeSlidesPath: null,
                 title: 'Custom Presentation',
+                date: null,
+                author: null,
             },
         ]);
     });

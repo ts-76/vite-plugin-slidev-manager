@@ -70,7 +70,16 @@ export async function runDevSelector(
             }
         }
 
-        process.exit(await bridge.waitUntilStopped());
+        const cleanupShortcutHandler = installSwitchShortcutHandler({
+            bridge,
+            viteRoot,
+            invocation,
+            pluginOptions,
+        });
+
+        const exitCode = await bridge.waitUntilStopped();
+        cleanupShortcutHandler();
+        process.exit(exitCode);
     } catch (error: unknown) {
         console.error('Failed to run presentation selector:', getErrorMessage(error));
         process.exit(1);
@@ -165,4 +174,104 @@ export function resolvePresentationsDir(
     return pluginOptions.presentationsDir
         ? path.resolve(viteRoot, pluginOptions.presentationsDir)
         : undefined;
+}
+
+function installSwitchShortcutHandler({
+    bridge,
+    viteRoot,
+    invocation,
+    pluginOptions,
+}: {
+    bridge: {
+        switchDeck: (folder: string) => Promise<{ success: boolean; folder: string; error?: string }>;
+        currentFolder: string;
+    };
+    viteRoot: string;
+    invocation: SlidevInvocation;
+    pluginOptions: PresentationManagerOptions;
+}): () => void {
+    if (!process.stdin.isTTY) {
+        return () => {};
+    }
+
+    let switching = false;
+
+    const onData = (chunk: Buffer) => {
+        if (switching) {
+            return;
+        }
+
+        const input = chunk.toString();
+        if (!input.includes('\x13')) {
+            return;
+        }
+
+        switching = true;
+        console.log('\n[slidev-manager] Ctrl-s detected — opening deck selector...');
+
+        cleanup();
+
+        void handleSwitchShortcut(bridge, viteRoot, invocation, pluginOptions).finally(() => {
+            install();
+            switching = false;
+        });
+    };
+
+    const install = () => {
+        if (!process.stdin.isTTY) {
+            return;
+        }
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        process.stdin.on('data', onData);
+    };
+
+    const cleanup = () => {
+        process.stdin.off('data', onData);
+        if (typeof process.stdin.setRawMode === 'function') {
+            process.stdin.setRawMode(false);
+        }
+    };
+
+    install();
+    return cleanup;
+}
+
+async function handleSwitchShortcut(
+    bridge: { switchDeck: (folder: string) => Promise<{ success: boolean; folder: string; error?: string }>; currentFolder: string },
+    viteRoot: string,
+    invocation: SlidevInvocation,
+    pluginOptions: PresentationManagerOptions,
+): Promise<void> {
+    try {
+        const { selectPresentation } = await import('./presentation-selector.js');
+        const selection = await selectPresentation({
+            action: invocation.action,
+            heading: 'Switch deck',
+            helpText: 'Select a new deck or press Esc to cancel.',
+            projectRoot: viteRoot,
+            presentationsDir: resolvePresentationsDir(pluginOptions, viteRoot),
+        });
+
+        restoreTerminalInput();
+
+        if (selection.cancelled || !selection.selected) {
+            console.log('\n[slidev-manager] Switch cancelled.');
+            return;
+        }
+
+        if (selection.selected.folder === bridge.currentFolder) {
+            console.log(`\n[slidev-manager] "${selection.selected.folder}" is already running.`);
+            return;
+        }
+
+        const result = await bridge.switchDeck(selection.selected.folder);
+        if (result.success) {
+            console.log(`\n[slidev-manager] Switched to "${result.folder}".`);
+        } else {
+            console.error(`\n[slidev-manager] Switch failed: ${result.error}`);
+        }
+    } catch (error: unknown) {
+        console.error(`\n[slidev-manager] Switch error: ${getErrorMessage(error)}`);
+    }
 }

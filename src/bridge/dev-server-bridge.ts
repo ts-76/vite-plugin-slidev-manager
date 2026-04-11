@@ -38,8 +38,16 @@ export interface LaunchContext {
 export interface DevServerBridge {
     readonly bridgePort: number;
     readonly currentFolder: string;
+    switchDeck(folder: string): Promise<SwitchDeckResult>;
     stop(): Promise<void>;
     waitUntilStopped(): Promise<number>;
+}
+
+export interface SwitchDeckResult {
+    success: boolean;
+    folder: string;
+    alreadyRunning?: boolean;
+    error?: string;
 }
 
 export interface DevServerBridgeRuntime {
@@ -108,44 +116,29 @@ export async function startDevServerBridge(
                 return;
             }
 
-            const target = context.presentations.find(
-                (presentation) => presentation.folder === folder,
-            );
-            if (!target) {
+            const targetUrl = publicUrl(publicPort, basePath);
+            const result = await bridgeSwitchDeck(folder);
+
+            if (!result.success && result.error?.includes('not found')) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: `Presentation "${folder}" not found` }));
+                res.end(JSON.stringify({ error: result.error }));
                 return;
             }
 
-            const targetUrl = publicUrl(publicPort, basePath);
-
-            if (target.folder === currentSelection.folder) {
+            if (result.success && result.alreadyRunning) {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(renderRedirectPage(targetUrl, `"${folder}" is already running.`));
                 return;
             }
 
-            console.log(
-                formatManagerLog(`Switching from "${currentSelection.folder}" to "${folder}"...`),
-            );
-
-            try {
-                const nextSession = await createSession(target);
-                const previousSession = currentSession;
-                currentSession = nextSession;
-                currentSelection = target;
-
+            if (result.success) {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                res.end(renderRedirectPage(targetUrl, `Switched to "${folder}".`), () => {
-                    if (previousSession) {
-                        void stopSession(previousSession);
-                    }
-                });
-            } catch (error: unknown) {
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: getErrorMessage(error) }));
+                res.end(renderRedirectPage(targetUrl, `Switched to "${folder}".`));
+                return;
             }
 
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: result.error }));
             return;
         }
 
@@ -187,12 +180,46 @@ export async function startDevServerBridge(
         }
     }
 
+    async function bridgeSwitchDeck(folder: string): Promise<SwitchDeckResult> {
+        const target = context.presentations.find(
+            (presentation) => presentation.folder === folder,
+        );
+        if (!target) {
+            return { success: false, folder, error: `Presentation "${folder}" not found` };
+        }
+        if (target.folder === currentSelection.folder) {
+            return { success: true, folder, alreadyRunning: true };
+        }
+
+        console.log(
+            formatManagerLog(`Switching from "${currentSelection.folder}" to "${folder}"...`),
+        );
+
+        try {
+            const nextSession = await createSession(target);
+            const previousSession = currentSession;
+            currentSession = nextSession;
+            currentSelection = target;
+
+            if (previousSession) {
+                await stopSession(previousSession);
+            }
+
+            return { success: true, folder };
+        } catch (error: unknown) {
+            return { success: false, folder, error: getErrorMessage(error) };
+        }
+    }
+
     return {
         get bridgePort() {
             return publicPort;
         },
         get currentFolder() {
             return currentSelection.folder;
+        },
+        switchDeck(folder: string) {
+            return bridgeSwitchDeck(folder);
         },
         async stop() {
             await stopBridge();
